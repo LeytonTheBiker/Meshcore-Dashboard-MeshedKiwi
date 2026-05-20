@@ -22,10 +22,21 @@ fi
 # docker-compose bind-mounts these as FILES — if they don't exist Docker
 # creates them as directories, which breaks the app.
 mkdir -p data
-if [ ! -f data/settings.json ]; then
-  echo '{}' > data/settings.json
-  echo "Created data/settings.json"
+
+# users.json stores all accounts and their settings (multi-tenant)
+# If old settings.json exists, the app will auto-import it on first run.
+if [ ! -f data/users.json ]; then
+  # Start empty — app will create default admin/admin on first start
+  # and import settings.json if it exists.
+  echo "" > data/users.json
+  echo "Created data/users.json"
 fi
+
+if [ ! -f data/sessions.json ]; then
+  echo "{}" > data/sessions.json
+  echo "Created data/sessions.json"
+fi
+
 if [ ! -f data/repeater_history.db ]; then
   touch data/repeater_history.db
   echo "Created data/repeater_history.db"

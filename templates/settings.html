@@ -1,557 +1,764 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Settings - MeshCore Dashboard</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <style>
-    .settings-page-header {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      padding: 1rem 0 1.25rem;
-      border-bottom: 1px solid #1e293b;
-      margin-bottom: 1.5rem;
-      max-width: 900px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    .back-btn {
-      background: none;
-      border: 1px solid #334155;
-      color: #94a3b8;
-      font-size: 0.85rem;
-      cursor: pointer;
-      padding: 0.35rem 0.75rem;
-      border-radius: 6px;
-      font-family: inherit;
-      text-decoration: none;
-      transition: color 0.2s, border-color 0.2s;
-      display: inline-block;
-    }
-    .back-btn:hover { color: #e2e8f0; border-color: #64748b; }
-    .settings-page-header h2 { margin: 0; font-size: 1.1rem; color: #e2e8f0; }
-    .settings-page-body {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 0 1rem 2rem;
-    }
-    /* Connection status */
-    .conn-status-row {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-    }
-    .conn-status-text {
-      flex: 1;
-      font-size: 0.85rem;
-      color: #94a3b8;
-    }
-    .conn-status-text strong { color: #e2e8f0; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MeshCore — Settings</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green-dark:  #2d5016;
+    --green-mid:   #4a7c24;
+    --green-light: #c8e6c9;
+    --green-pale:  #f0f7ee;
+    --green-border:#b8d4b0;
+    --bg:          #f5f5f0;
+    --surface:     #ffffff;
+    --surface2:    #f8faf6;
+    --border:      #dde8d6;
+    --border-mid:  #c0d4b4;
+    --text:        #1a1a1a;
+    --text-sec:    #4a5a3a;
+    --muted:       #7a8a6a;
+    --danger:      #b91c1c;
+    --danger-bg:   #fef2f2;
+    --online:      #2d7a22;
+    --offline:     #b91c1c;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Lato', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* NAV */
+  nav {
+    background: var(--green-dark);
+    display: flex; align-items: center;
+    padding: 0 1.5rem; height: 52px; gap: 1.4rem;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  .nav-brand {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.2rem; font-weight: 700;
+    color: #fff; text-transform: uppercase; letter-spacing: 0.08em;
+    margin-right: auto; display: flex; align-items: center; gap: 0.4rem;
+    text-decoration: none;
+  }
+
+  nav a {
+    color: rgba(255,255,255,0.65);
+    text-decoration: none;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.9rem; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; padding: 0.2rem 0;
+    border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  nav a:hover { color: #fff; }
+  nav a.active { color: #fff; border-bottom-color: var(--green-light); }
+
+  .nav-right { display: flex; align-items: center; gap: 0.5rem; }
+
+  .conn-pill {
+    display: flex; align-items: center; gap: 0.35rem;
+    padding: 0.2rem 0.65rem;
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 20px; font-family: monospace; font-size: 0.7rem;
+    color: rgba(255,255,255,0.75);
+  }
+
+  .conn-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.3); flex-shrink: 0; transition: background 0.3s; }
+  .conn-dot.online  { background: #4ade80; }
+  .conn-dot.offline { background: #f87171; }
+
+  .btn-nav {
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25);
+    color: rgba(255,255,255,0.75); padding: 0.25rem 0.75rem;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.8rem; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+    border-radius: 4px; transition: all 0.15s;
+  }
+  .btn-nav:hover { background: rgba(255,255,255,0.18); color: #fff; }
+
+  /* LAYOUT */
+  main { padding: 1.5rem; max-width: 820px; margin: 0 auto; padding-bottom: 100px; }
+
+  .section-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.72rem; font-weight: 700;
+    letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--green-mid);
+    margin: 1.6rem 0 0.5rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 2px solid var(--green-border);
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(45,80,22,0.06);
+  }
+
+  .card-body { padding: 1.1rem 1.3rem; }
+  .card-body + .card-body { border-top: 1px solid var(--border); }
+
+  /* FORM */
+  .field-label {
+    display: block;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.72rem; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 0.3rem;
+  }
+
+  .field-hint { font-size: 0.72rem; color: var(--muted); margin-top: 0.2rem; }
+
+  input[type=text], input[type=number], input[type=password] {
+    width: 100%;
+    background: var(--green-pale);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: monospace; font-size: 0.85rem;
+    padding: 0.48rem 0.75rem;
+    border-radius: 4px; outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input:focus {
+    border-color: var(--green-mid);
+    box-shadow: 0 0 0 3px rgba(74,124,36,0.15);
+    background: #fff;
+  }
+
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
+  .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.85rem; }
+
+  /* TOGGLE ROWS */
+  .toggle-row {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.85rem 1.3rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .toggle-row:last-child { border-bottom: none; }
+
+  .toggle-info { flex: 1; min-width: 0; }
+
+  .toggle-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.95rem; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--green-dark);
+  }
+
+  .toggle-desc { font-size: 0.78rem; color: var(--text-sec); margin-top: 0.1rem; line-height: 1.4; }
+
+  .toggle-switch { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-slider {
+    position: absolute; inset: 0;
+    background: var(--border-mid); border-radius: 12px;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .toggle-slider::after {
+    content: ''; position: absolute; left: 3px; top: 3px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    transition: transform 0.2s;
+  }
+  input:checked + .toggle-slider { background: var(--green-mid); }
+  input:checked + .toggle-slider::after { transform: translateX(18px); }
+
+  /* CONNECTION TEST */
+  .conn-test-area {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.85rem 1.3rem;
+    background: var(--green-pale);
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .conn-test-result {
+    font-family: monospace; font-size: 0.8rem;
+    flex: 1; min-width: 0; line-height: 1.4;
+    color: var(--muted);
+  }
+  .conn-test-result.ok      { color: var(--green-mid); }
+  .conn-test-result.error   { color: var(--danger); }
+  .conn-test-result.testing { color: #92400e; }
+
+  /* BUTTONS */
+  .btn {
+    background: var(--green-mid); color: #fff; border: none;
+    padding: 0.5rem 1.1rem;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem;
+    font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    border-radius: 4px; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn:hover { background: var(--green-dark); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-outline {
+    background: transparent; color: var(--green-mid);
+    border: 1px solid var(--green-mid);
+    padding: 0.45rem 1rem;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.88rem;
+    font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+    border-radius: 4px; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-outline:hover { background: var(--green-pale); }
+  .btn-outline:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-ghost {
+    background: var(--surface); color: var(--text-sec);
+    border: 1px solid var(--border);
+    padding: 0.45rem 1rem;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.88rem;
+    font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    border-radius: 4px; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-ghost:hover { border-color: var(--border-mid); color: var(--text); }
+
+  .btn-danger {
+    background: transparent; color: var(--danger);
+    border: 1px solid #fca5a5;
+    padding: 0.3rem 0.65rem;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.82rem;
+    font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    border-radius: 4px; cursor: pointer; transition: all 0.15s;
+  }
+  .btn-danger:hover { background: var(--danger-bg); border-color: var(--danger); }
+
+  /* REPEATERS */
+  .repeater-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+  .rep-item {
+    border: 1px solid var(--border); border-radius: 6px;
+    overflow: hidden; background: var(--surface2);
+  }
+
+  .rep-body { padding: 0.85rem 1rem; }
+  .rep-grid { display: grid; grid-template-columns: 1fr 2fr auto; gap: 0.65rem; align-items: end; }
+  .rep-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-top: 0.65rem; }
+
+  .rep-footer {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    background: var(--green-pale);
+    border-top: 1px solid var(--border);
+  }
+
+  /* Path mode selector */
+  .path-mode-row {
+    display: flex; align-items: center; gap: 0; margin-top: 0.65rem;
+  }
+  .path-mode-btn {
+    flex: 1; padding: 0.38rem 0; text-align: center;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.75rem; font-weight: 700;
+    letter-spacing: 0.07em; text-transform: uppercase;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--muted); cursor: pointer; transition: all 0.15s;
+    border-right-width: 0;
+  }
+  .path-mode-btn:first-child { border-radius: 4px 0 0 4px; }
+  .path-mode-btn:last-child  { border-radius: 0 4px 4px 0; border-right-width: 1px; }
+  .path-mode-btn.active {
+    background: var(--green-mid); border-color: var(--green-mid);
+    color: #fff; z-index: 1;
+  }
+  .path-mode-btn.active-direct {
+    background: #1d4ed8; border-color: #1d4ed8; color: #fff; z-index: 1;
+  }
+  .path-mode-btn.active-custom {
+    background: var(--green-dark); border-color: var(--green-dark); color: #fff; z-index: 1;
+  }
+  .path-custom-input {
+    margin-top: 0.5rem; display: none;
+  }
+  .path-custom-input.visible { display: block; }
+  .path-status {
+    margin-top: 0.3rem; font-size: 0.72rem; color: var(--muted);
+    font-style: italic; min-height: 1rem;
+  }
+  .path-status.discovered { color: var(--green-mid); font-style: normal; font-weight: 600; }
+
+  /* USER LIST */
+  .user-list { display: flex; flex-direction: column; gap: 0.3rem; }
+
+  .user-item {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.55rem 0.75rem;
+    background: var(--green-pale); border: 1px solid var(--border);
+    border-radius: 4px; font-size: 0.83rem;
+  }
+
+  .user-name { font-family: monospace; font-size: 0.82rem; flex: 1; }
+
+  .badge-admin {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em;
+    padding: 0.1rem 0.5rem;
+    background: var(--green-light); border: 1px solid var(--green-border);
+    color: var(--green-dark); border-radius: 20px; text-transform: uppercase;
+  }
+
+  /* SAVE BAR */
+  .save-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--green-dark);
+    padding: 0.85rem 1.5rem;
+    display: flex; gap: 0.75rem; align-items: center;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
+    z-index: 50;
+  }
+
+  .save-status {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.82rem; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--green-light);
+  }
+
+  /* TOAST */
+  .toast {
+    position: fixed; bottom: 5rem; right: 1.5rem;
+    background: var(--green-dark); color: #fff;
+    padding: 0.65rem 1.1rem; font-size: 0.85rem;
+    max-width: 340px; z-index: 999;
+    opacity: 0; transform: translateY(8px);
+    transition: all 0.25s; border-radius: 4px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    border-left: 3px solid var(--green-light);
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { background: var(--danger); border-left-color: #fca5a5; }
+</style>
 </head>
 <body>
 
-  <div class="settings-page-header">
-    <a href="/" class="back-btn">&larr; Dashboard</a>
-    <h2>Settings</h2>
+<nav>
+  <a href="/" class="nav-brand">📡 MeshCore</a>
+  <a href="/">Dashboard</a>
+    <a href="/poll-queue">Poll Queue</a>
+  <a href="/settings" class="active">Settings</a>
+  <div class="nav-right">
+    <div class="conn-pill">
+      <div class="conn-dot" id="connDot"></div>
+      <span id="connStatus">Checking…</span>
+    </div>
+    <button class="btn-nav" onclick="logout()">Sign out</button>
+  </div>
+</nav>
+
+<main>
+
+  <div id="companionSection" style="display:none">
+    <div class="section-label">Companion Connection <span style="font-family:'Lato',sans-serif;font-size:0.7rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">· Admin only</span></div>
+    <div class="card">
+      <div class="card-body">
+        <div class="row-2">
+          <div>
+            <div class="field-label">Host IP Address</div>
+            <input type="text" id="companion_host" placeholder="192.168.1.100">
+          </div>
+          <div>
+            <div class="field-label">Port</div>
+            <input type="number" id="companion_port" value="5000">
+          </div>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-title">Auto-Reconnect</div>
+          <div class="toggle-desc">Automatically reconnect to the companion device when the connection drops</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="autoReconnectToggle" checked onchange="setAutoReconnect(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="conn-test-area">
+        <button class="btn-outline" id="testConnBtn" onclick="testConnection()">Test Connection</button>
+        <div class="conn-test-result" id="connTestResult">Enter host and port above, then click to verify</div>
+      </div>
+    </div>
+
+    <div class="section-label">Polling Schedule <span style="font-family:'Lato',sans-serif;font-size:0.7rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">· Admin only</span></div>
+    <div class="card">
+      <div class="card-body">
+        <div class="row-3">
+          <div>
+            <div class="field-label">Poll Interval (s)</div>
+            <input type="number" id="poll_interval_seconds" value="3600">
+            <div class="field-hint">How often to poll all nodes</div>
+          </div>
+          <div>
+            <div class="field-label">Stagger Delay (s)</div>
+            <input type="number" id="stagger_delay_seconds" value="30">
+            <div class="field-hint">Delay between each node</div>
+          </div>
+          <div>
+            <div class="field-label">Stale Threshold (s)</div>
+            <input type="number" id="stale_threshold_seconds" value="900">
+            <div class="field-hint">Mark offline after this time</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <div class="settings-page-body">
-
-    <!-- Connection Status -->
-    <div class="settings-section">
-      <h3>Connection Status</h3>
-      <div class="conn-status-row">
-        <span class="status-dot unknown" id="connStatusDot"></span>
-        <span class="conn-status-text" id="connStatusText">Checking&hellip;</span>
-        <button class="btn btn-secondary" id="connToggleBtn" onclick="toggleConnection()" style="min-width:6rem">
-          &hellip;
-        </button>
-      </div>
+  <div class="section-label">Nodes / Repeaters</div>
+  <div class="card">
+    <div class="card-body">
+      <div class="repeater-list" id="repeaterList"></div>
+      <button class="btn-ghost" onclick="addRepeater()" style="width:100%;margin-top:0.6rem;text-align:center;">+ Add Node</button>
     </div>
-
-    <!-- Companion Device -->
-    <div class="settings-section">
-      <h3>Companion Device</h3>
-      <div class="settings-row">
-        <div class="settings-field">
-          <label for="companionHost">IP Address</label>
-          <input type="text" id="companionHost" placeholder="192.168.1.100">
-        </div>
-        <div class="settings-field settings-field-small">
-          <label for="companionPort">Port</label>
-          <input type="number" id="companionPort" placeholder="5000" value="5000">
-        </div>
-      </div>
-    </div>
-
-    <!-- Polling Timing -->
-    <div class="settings-section">
-      <h3>Polling Timing</h3>
-      <div class="settings-row">
-        <div class="settings-field">
-          <label for="pollInterval">Poll Cycle (seconds)</label>
-          <input type="number" id="pollInterval" placeholder="3600" min="30">
-        </div>
-        <div class="settings-field">
-          <label for="staggerDelay">Stagger Delay (seconds)</label>
-          <input type="number" id="staggerDelay" placeholder="30" min="5">
-        </div>
-        <div class="settings-field settings-field-small">
-          <label for="lowBatteryPct">Low Batt %</label>
-          <input type="number" id="lowBatteryPct" placeholder="20" min="5" max="50" value="20">
-        </div>
-      </div>
-    </div>
-
-    <!-- Map -->
-    <div class="settings-section">
-      <h3>Map</h3>
-      <div class="settings-row">
-        <div class="settings-field">
-          <label for="mapPathMaxKm">Max path segment distance (km)</label>
-          <input type="number" id="mapPathMaxKm" placeholder="300" min="10" max="5000" value="300">
-        </div>
-        <div class="settings-field settings-field-small">
-          <label for="nodeIdChars">Node ID depth</label>
-          <select id="nodeIdChars" style="height:2.2rem;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:0 0.5rem;font-family:inherit;font-size:0.9rem;">
-            <option value="2">1 byte (2 chars)</option>
-            <option value="4">2 bytes (4 chars)</option>
-            <option value="6">3 bytes (6 chars)</option>
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <!-- Channels -->
-    <div class="settings-section">
-      <h3>Channels</h3>
-      <p class="settings-help">Name each channel index you want to monitor and message on. Channel passwords are configured on the device using the MeshCore app — the dashboard uses whatever channels are already set up on the node.</p>
-      <div id="channelList"></div>
-      <button class="btn btn-add" onclick="addChannelRow()">+ Add Channel</button>
-    </div>
-
-    <!-- Repeaters -->
-    <div class="settings-section">
-      <h3>Repeaters</h3>
-      <div id="repeaterList"></div>
-      <button class="btn btn-add" onclick="addRepeaterRow()">+ Add Repeater</button>
-    </div>
-
-    <!-- Push Notifications -->
-    <div class="settings-section">
-      <h3>Push Notifications (ntfy)</h3>
-      <p class="settings-help">Get a phone notification when a message arrives. Uses <a href="https://ntfy.sh" target="_blank" style="color:#38bdf8">ntfy.sh</a> by default, or point to your own self-hosted ntfy server. Leave topic blank to disable.</p>
-      <div class="settings-field">
-        <div class="settings-label">ntfy Topic</div>
-        <input type="text" id="ntfyTopic" placeholder="e.g. meshcore-mattwh-alerts">
-      </div>
-      <div class="settings-field" style="margin-top:0.6rem">
-        <div class="settings-label">ntfy Server</div>
-        <input type="text" id="ntfyServer" placeholder="https://ntfy.sh">
-      </div>
-      <div class="settings-field" style="margin-top:0.6rem">
-        <div class="settings-label">Dashboard URL <span style="font-size:0.75em;color:#64748b">(tap notification to open)</span></div>
-        <input type="text" id="dashboardUrl" placeholder="http://192.168.1.100:8080">
-      </div>
-      <div style="margin-top:0.75rem;display:flex;align-items:center;gap:0.75rem">
-        <button class="btn btn-secondary" onclick="testNtfy()">Send Test Notification</button>
-        <span id="ntfyTestResult" style="font-size:0.82rem"></span>
-      </div>
-    </div>
-
-    <!-- Software Update -->
-    <div class="settings-section">
-      <h3>Software Update</h3>
-      <p class="settings-help">Upload a .zip of updated source files to apply changes without SSH access.</p>
-      <div class="update-row">
-        <input type="file" id="updateZipInput" accept=".zip" style="display:none" onchange="handleUpdateZip(this)">
-        <button class="btn btn-secondary" onclick="document.getElementById('updateZipInput').click()">Choose .zip&hellip;</button>
-        <span id="updateZipName" class="update-zip-name">No file chosen</span>
-        <button class="btn btn-secondary" id="uploadUpdateBtn" onclick="doUpdate()" disabled>Upload &amp; Apply</button>
-      </div>
-      <div id="updateResult" class="update-result"></div>
-    </div>
-
-    <!-- Actions -->
-    <div class="settings-actions">
-      <span id="settingsStatus" class="settings-status"></span>
-      <a href="/" class="btn btn-secondary">Cancel</a>
-      <button class="btn btn-primary" onclick="saveSettings()">Save &amp; Apply</button>
-    </div>
-
   </div>
 
-  <script>
-    // --- Utilities ---
+  <div class="section-label">Push Notifications (ntfy)</div>
+  <div class="card">
+    <div class="card-body">
+      <div class="row-2">
+        <div>
+          <div class="field-label">ntfy Topic</div>
+          <input type="text" id="ntfy_topic" placeholder="my-meshcore-alerts">
+        </div>
+        <div>
+          <div class="field-label">ntfy Server</div>
+          <input type="text" id="ntfy_server" value="https://ntfy.sh">
+        </div>
+      </div>
+    </div>
+  </div>
 
-    function escapeAttr(str) {
-      return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
+  <div class="section-label">Account</div>
+  <div class="card">
+    <div class="card-body">
+      <div class="field-label">Change Password</div>
+      <div class="row-2" style="align-items:end;">
+        <input type="password" id="new_password" placeholder="New password (min 6 characters)">
+        <button class="btn-outline" onclick="changePassword()">Update Password</button>
+      </div>
+    </div>
+  </div>
 
-    function showStatus(msg, isError) {
-      var el = document.getElementById('settingsStatus');
-      el.textContent = msg;
-      el.className = 'settings-status' + (isError ? ' settings-status-error' : ' settings-status-ok');
-    }
+  <div id="adminSection" style="display:none">
+    <div class="section-label">User Management <span style="text-transform:none;letter-spacing:0;font-weight:400">· Admin only</span></div>
+    <div class="card">
+      <div class="card-body">
+        <div class="user-list" id="userList"></div>
+        <div class="row-2" style="margin-top:0.75rem;">
+          <input type="text" id="newUsername" placeholder="New username">
+          <input type="password" id="newPassword" placeholder="Password">
+        </div>
+        <button class="btn" onclick="createUser()" style="margin-top:0.6rem;">Create User</button>
+      </div>
+    </div>
+  </div>
 
-    // --- Connection Status ---
+</main>
 
-    var _isConnected = null;
+<div class="save-bar">
+  <button class="btn" style="background:#fff;color:var(--green-dark);border:none;" onclick="saveSettings()">Save Settings</button>
+  <button class="btn-ghost" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);color:rgba(255,255,255,0.75);" onclick="init()">Discard</button>
+  <span class="save-status" id="saveStatus"></span>
+</div>
 
-    function updateConnectionUI(connected, host, port) {
-      _isConnected = connected;
-      var dot = document.getElementById('connStatusDot');
-      var txt = document.getElementById('connStatusText');
-      var btn = document.getElementById('connToggleBtn');
-      dot.className = 'status-dot ' + (connected ? 'online' : 'offline');
-      txt.innerHTML = connected
-        ? 'Connected to <strong>' + escapeAttr(host) + ':' + port + '</strong>'
-        : 'Not connected to companion device';
-      btn.textContent = connected ? 'Disconnect' : 'Connect';
-    }
+<div class="toast" id="toast"></div>
 
-    function loadConnectionStatus() {
-      fetch('/api/connection')
-        .then(function(r) { return r.json(); })
-        .then(function(d) { updateConnectionUI(d.connected, d.host, d.port); })
-        .catch(function() {});
-    }
+<script>
+let settings = {};
+let isAdmin  = false;
 
-    function toggleConnection() {
-      var btn = document.getElementById('connToggleBtn');
-      btn.disabled = true;
-      btn.textContent = '\u2026';
-      var wantDisconnect = _isConnected;
-      var endpoint = wantDisconnect ? '/api/disconnect' : '/api/connect';
-      fetch(endpoint, { method: 'POST' })
-        .then(function() {
-          // Poll until the status actually flips (up to 20 attempts × 1s)
-          var attempts = 0;
-          function poll() {
-            fetch('/api/connection')
-              .then(function(r) { return r.json(); })
-              .then(function(d) {
-                var flipped = wantDisconnect ? !d.connected : d.connected;
-                if (flipped || attempts >= 30) {
-                  btn.disabled = false;
-                  updateConnectionUI(d.connected, d.host, d.port);
-                } else {
-                  attempts++;
-                  setTimeout(poll, 1000);
-                }
-              })
-              .catch(function() { btn.disabled = false; });
-          }
-          setTimeout(poll, 500);
-        })
-        .catch(function() { btn.disabled = false; });
-    }
+async function init() {
+  const me = await fetch('/api/me').then(r => r.json()).catch(() => null);
+  if (!me || !me.username) { window.location.href = '/login'; return; }
+  isAdmin = me.is_admin || false;
+  if (isAdmin) {
+    document.getElementById('adminSection').style.display = '';
+    document.getElementById('companionSection').style.display = '';
+    loadUsers();
+  }
+  settings = await fetch('/api/settings').then(r => r.json());
+  applySettings(settings);
+  loadConnectionState();
+}
 
-    // Refresh connection status every 5s
-    setInterval(loadConnectionStatus, 5000);
+async function loadConnectionState() {
+  try {
+    const conn = await fetch('/api/connection').then(r => r.json());
+    const dot  = document.getElementById('connDot');
+    dot.className = 'conn-dot ' + (conn.connected ? 'online' : 'offline');
+    document.getElementById('connStatus').textContent = conn.connected
+      ? conn.host + ':' + conn.port : 'Disconnected';
+    const t = document.getElementById('autoReconnectToggle');
+    if (t) t.checked = conn.auto_reconnect !== false;
+  } catch(e) {}
+}
 
-    // --- Channel Rows ---
+function applySettings(s) {
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  setVal('companion_host',         s.companion_host || '');
+  setVal('companion_port',         s.companion_port || 5000);
+  setVal('poll_interval_seconds',  s.poll_interval_seconds || 3600);
+  setVal('stagger_delay_seconds',  s.stagger_delay_seconds || 30);
+  setVal('stale_threshold_seconds',s.stale_threshold_seconds || 900);
+  setVal('ntfy_topic',             s.ntfy_topic || '');
+  setVal('ntfy_server',            s.ntfy_server || 'https://ntfy.sh');
+  renderRepeaters(s.repeaters || []);
+}
 
-    function addChannelRow(name, idx) {
-      var list = document.getElementById('channelList');
-      var row = document.createElement('div');
-      row.className = 'repeater-row';
-      row.innerHTML =
-        '<div class="settings-field">' +
-          '<label>Name</label>' +
-          '<input type="text" class="ch-name" placeholder="Primary" value="' + escapeAttr(name || '') + '">' +
-        '</div>' +
-        '<div class="settings-field settings-field-small">' +
-          '<label>Channel #</label>' +
-          '<input type="number" class="ch-idx" placeholder="0" min="0" max="9" value="' + escapeAttr(idx !== undefined ? idx : '') + '">' +
-        '</div>' +
-        '<button class="btn-remove" title="Remove">&times;</button>';
-      row.querySelector('.btn-remove').addEventListener('click', function() { row.remove(); });
-      list.appendChild(row);
-    }
-
-    // --- Repeater Rows ---
-
-    function moveRepeaterRow(row, direction) {
-      var list = document.getElementById('repeaterList');
-      if (!list) return;
-      if (direction === -1 && row.previousElementSibling) {
-        list.insertBefore(row, row.previousElementSibling);
-      } else if (direction === 1 && row.nextElementSibling) {
-        list.insertBefore(row.nextElementSibling, row);
-      }
-    }
-
-    function addRepeaterRow(name, pubkey, adminPass, path, fwVersion) {
-      var list = document.getElementById('repeaterList');
-      var row = document.createElement('div');
-      row.className = 'repeater-row';
-      var fwBadge = fwVersion
-        ? '<span class="rpt-fw-badge" title="Firmware version">FW ' + escapeAttr(fwVersion) + '</span>'
-        : '';
-      row.innerHTML =
-        '<div class="rpt-move-btns">' +
-          '<button class="card-move-btn rpt-move-up" title="Move up">&#8593;</button>' +
-          '<button class="card-move-btn rpt-move-down" title="Move down">&#8595;</button>' +
-        '</div>' +
-        '<div class="settings-field">' +
-          '<label>Name</label>' +
-          '<input type="text" class="rpt-name" placeholder="My Repeater" value="' + escapeAttr(name || '') + '">' +
-          fwBadge +
-        '</div>' +
-        '<div class="settings-field">' +
-          '<label>Public Key</label>' +
-          '<input type="text" class="rpt-pubkey" placeholder="a1b2c3d4e5f6..." value="' + escapeAttr(pubkey || '') + '">' +
-        '</div>' +
-        '<div class="settings-field settings-field-small">' +
-          '<label>Admin Pass</label>' +
-          '<input type="text" class="rpt-pass" placeholder="password" value="' + escapeAttr(adminPass || '') + '">' +
-        '</div>' +
-        '<div class="settings-field settings-field-path">' +
-          '<label>Path</label>' +
-          '<input type="text" class="rpt-path" placeholder="4d,3c,ee" value="' + escapeAttr(path || '') + '">' +
-        '</div>' +
-        '<button class="btn-remove" title="Remove">&times;</button>';
-
-      row.querySelector('.rpt-move-up').addEventListener('click', function() { moveRepeaterRow(row, -1); });
-      row.querySelector('.rpt-move-down').addEventListener('click', function() { moveRepeaterRow(row, 1); });
-      row.querySelector('.btn-remove').addEventListener('click', function() { row.remove(); });
-      list.appendChild(row);
-    }
-
-    // --- ntfy Test ---
-
-    function testNtfy() {
-      var topic = document.getElementById('ntfyTopic').value.trim();
-      var server = document.getElementById('ntfyServer').value.trim() || 'https://ntfy.sh';
-      var clickUrl = document.getElementById('dashboardUrl').value.trim();
-      var resultEl = document.getElementById('ntfyTestResult');
-      if (!topic) { resultEl.style.color = '#f87171'; resultEl.textContent = 'Enter a topic first'; return; }
-      resultEl.style.color = '#94a3b8';
-      resultEl.textContent = 'Sending\u2026';
-      fetch('/api/ntfy/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: topic, server: server, click_url: clickUrl })
-      })
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-          if (res.ok) {
-            resultEl.style.color = '#4ade80';
-            resultEl.textContent = '\u2713 Sent — check your phone';
-          } else {
-            resultEl.style.color = '#f87171';
-            resultEl.textContent = 'Failed: ' + (res.error || 'unknown error');
-          }
-        })
-        .catch(function() {
-          resultEl.style.color = '#f87171';
-          resultEl.textContent = 'Request failed';
-        });
-    }
-
-    // --- Save ---
-
-    function saveSettings() {
-      var host = document.getElementById('companionHost').value.trim();
-      var port = document.getElementById('companionPort').value.trim();
-      var pollInterval = document.getElementById('pollInterval').value.trim();
-      var staggerDelay = document.getElementById('staggerDelay').value.trim();
-      var lowBatPct = document.getElementById('lowBatteryPct').value.trim();
-      var mapPathMaxKm = document.getElementById('mapPathMaxKm').value.trim();
-      var nodeIdChars = parseInt(document.getElementById('nodeIdChars').value) || 2;
-
-      if (!host) { showStatus('Companion IP is required', true); return; }
-
-      // Collect channels
-      var chRows = document.querySelectorAll('#channelList .repeater-row');
-      var channels = [];
-      for (var i = 0; i < chRows.length; i++) {
-        var cn = chRows[i].querySelector('.ch-name').value.trim();
-        var ci = chRows[i].querySelector('.ch-idx').value.trim();
-        if (cn && ci !== '') {
-          channels.push({ name: cn, idx: parseInt(ci) || 0 });
-        }
-      }
-
-      // Collect repeaters
-      var rows = document.querySelectorAll('.repeater-row');
-      var repeaters = [];
-      for (var j = 0; j < rows.length; j++) {
-        if (!rows[j].querySelector('.rpt-name')) continue;
-        var n = rows[j].querySelector('.rpt-name').value.trim();
-        var p = rows[j].querySelector('.rpt-pubkey').value.trim();
-        var pw = rows[j].querySelector('.rpt-pass').value.trim();
-        var pt = rows[j].querySelector('.rpt-path').value.trim();
-        if (n && p) {
-          var rpt = { name: n, pubkey: p, path: pt };
-          if (pw) rpt.admin_pass = pw;
-          repeaters.push(rpt);
-        } else if (n || p) {
-          showStatus('Each repeater needs both a name and public key', true);
-          return;
-        }
-      }
-
-      var ntfyTopic = document.getElementById('ntfyTopic').value.trim();
-      var ntfyServer = document.getElementById('ntfyServer').value.trim();
-      var dashboardUrl = document.getElementById('dashboardUrl').value.trim();
-
-      var payload = {
-        companion_host: host,
-        companion_port: parseInt(port) || 5000,
-        repeaters: repeaters,
-        channels: channels,
-        poll_interval_seconds: parseInt(pollInterval) || 3600,
-        stagger_delay_seconds: parseInt(staggerDelay) || 30,
-        stale_threshold_seconds: 900,
-        low_battery_percent: parseInt(lowBatPct) || 20,
-        map_path_max_km: parseInt(mapPathMaxKm) || 300,
-        node_id_chars: nodeIdChars,
-        ntfy_topic: ntfyTopic,
-        ntfy_server: ntfyServer || "https://ntfy.sh",
-        dashboard_url: dashboardUrl
-      };
-
-      fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-        .then(function(r) { return r.json(); })
-        .then(function(result) {
-          if (result.ok) {
-            showStatus('Saved! Returning to dashboard...', false);
-            setTimeout(function() { window.location = '/'; }, 1200);
-          } else {
-            showStatus(result.error || 'Save failed', true);
-          }
-        })
-        .catch(function(err) { showStatus('Network error: ' + err.message, true); });
-    }
-
-    // --- Software Update ---
-
-    var _updateFile = null;
-
-    function handleUpdateZip(input) {
-      var f = input.files[0];
-      input.value = '';
-      if (!f) return;
-      _updateFile = f;
-      document.getElementById('updateZipName').textContent = f.name + ' (' + (f.size / 1024).toFixed(0) + ' KB)';
-      document.getElementById('uploadUpdateBtn').disabled = false;
-      document.getElementById('updateResult').textContent = '';
-      document.getElementById('updateResult').className = 'update-result';
-    }
-
-    function doUpdate() {
-      if (!_updateFile) return;
-      var btn = document.getElementById('uploadUpdateBtn');
-      var resultEl = document.getElementById('updateResult');
-      btn.disabled = true;
-      resultEl.textContent = 'Uploading...';
-      resultEl.className = 'update-result';
-
-      var fd = new FormData();
-      fd.append('file', _updateFile);
-
-      fetch('/api/update', { method: 'POST', body: fd })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          if (data.ok) {
-            var count = (data.files || []).length;
-            resultEl.innerHTML = '<span class="update-ok">&#10003; ' + count + ' file' + (count !== 1 ? 's' : '') + ' applied.</span> ';
-            var rb = document.createElement('button');
-            rb.className = 'btn btn-primary';
-            rb.style.cssText = 'padding:0.2rem 0.7rem;font-size:0.8rem';
-            rb.textContent = 'Restart Now';
-            rb.onclick = doRestart;
-            resultEl.appendChild(rb);
-            _updateFile = null;
-          } else {
-            resultEl.textContent = 'Error: ' + data.error;
-            resultEl.className = 'update-result err';
-            btn.disabled = false;
-          }
-        })
-        .catch(function(e) {
-          resultEl.textContent = 'Network error: ' + e.message;
-          resultEl.className = 'update-result err';
-          btn.disabled = false;
-        });
-    }
-
-    function doRestart() {
-      var resultEl = document.getElementById('updateResult');
-      resultEl.innerHTML = 'Restarting \u2014 page will reload when server is back\u2026';
-      resultEl.className = 'update-result';
-      fetch('/api/restart', { method: 'POST' }).catch(function() {});
-      function poll() {
-        fetch('/').then(function(r) {
-          if (r.ok) { window.location = '/'; }
-          else { setTimeout(poll, 2000); }
-        }).catch(function() { setTimeout(poll, 2000); });
-      }
-      setTimeout(poll, 2000);
-    }
-
-    // --- Load on page open ---
-
-    document.addEventListener('DOMContentLoaded', function() {
-      loadConnectionStatus();
-
-      fetch('/api/settings')
-        .then(function(r) { return r.json(); })
-        .then(function(s) {
-          document.getElementById('companionHost').value = s.companion_host || '';
-          document.getElementById('companionPort').value = s.companion_port || 5000;
-          document.getElementById('pollInterval').value = s.poll_interval_seconds || 3600;
-          document.getElementById('staggerDelay').value = s.stagger_delay_seconds || 30;
-          document.getElementById('lowBatteryPct').value = s.low_battery_percent || 20;
-          document.getElementById('mapPathMaxKm').value = s.map_path_max_km || 300;
-          document.getElementById('nodeIdChars').value = s.node_id_chars || 2;
-          document.getElementById('ntfyTopic').value = s.ntfy_topic || '';
-          document.getElementById('ntfyServer').value = s.ntfy_server || 'https://ntfy.sh';
-          document.getElementById('dashboardUrl').value = s.dashboard_url || '';
-
-          // Channels
-          var chList = document.getElementById('channelList');
-          chList.innerHTML = '';
-          var channels = s.channels || [{ name: 'Primary', idx: 0 }];
-          channels.forEach(function(c) { addChannelRow(c.name, c.idx); });
-
-          // Repeaters — also fetch live data to get FW versions
-          var list = document.getElementById('repeaterList');
-          list.innerHTML = '';
-          var repeaters = s.repeaters || [];
-
-          fetch('/api/repeaters')
-            .then(function(r) { return r.json(); })
-            .catch(function() { return []; })
-            .then(function(liveData) {
-              // Build a pubkey→fw_version lookup from live store
-              var fwMap = {};
-              (liveData || []).forEach(function(d) {
-                if (d.pubkey && d.fw_version) fwMap[d.pubkey] = d.fw_version;
-              });
-
-              if (repeaters.length === 0) {
-                addRepeaterRow();
-              } else {
-                repeaters.forEach(function(r) {
-                  var fw = fwMap[r.pubkey] || '';
-                  addRepeaterRow(r.name, r.pubkey, r.admin_pass, r.path, fw);
-                });
-              }
-            });
-        })
-        .catch(function() { showStatus('Failed to load settings', true); });
+async function setAutoReconnect(enabled) {
+  try {
+    const res  = await fetch('/api/connection/auto-reconnect', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ enabled })
     });
-  </script>
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Failed');
+    showToast(enabled ? 'Auto-reconnect enabled' : 'Auto-reconnect disabled — poller will not retry on drop');
+    loadConnectionState();
+  } catch(e) {
+    showToast('Could not update: ' + e.message, true);
+    document.getElementById('autoReconnectToggle').checked = !enabled;
+  }
+}
+
+async function testConnection() {
+  const host = document.getElementById('companion_host').value.trim();
+  const port = parseInt(document.getElementById('companion_port').value) || 5000;
+  const btn  = document.getElementById('testConnBtn');
+  const out  = document.getElementById('connTestResult');
+  if (!host) { out.textContent = '⚠ Enter a host IP first'; out.className = 'conn-test-result error'; return; }
+  btn.disabled = true;
+  out.textContent = 'Testing ' + host + ':' + port + '…';
+  out.className = 'conn-test-result testing';
+  try {
+    const t0   = Date.now();
+    const res  = await fetch('/api/connection/test', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ host, port }),
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = await res.json();
+    const ms   = Date.now() - t0;
+    if (data.ok) {
+      out.textContent = '✓ Connected in ' + ms + 'ms' + (data.device_name ? ' · ' + data.device_name : '');
+      out.className = 'conn-test-result ok';
+    } else {
+      out.textContent = '✗ ' + (data.error || 'Connection failed');
+      out.className = 'conn-test-result error';
+    }
+  } catch(e) {
+    out.textContent = '✗ ' + (e.name === 'TimeoutError' ? 'Timed out after 15 s' : e.message);
+    out.className = 'conn-test-result error';
+  } finally { btn.disabled = false; }
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function renderRepeaters(reps) {
+  const list = document.getElementById('repeaterList');
+  list.innerHTML = '';
+  reps.forEach(r => {
+    const item = document.createElement('div');
+    item.className = 'rep-item';
+    const mode = r.path_mode || 'auto';
+    const discoveredPath = r.discovered_path || '';
+    const autoActive   = mode === 'auto'   ? 'active'        : '';
+    const dirActive    = mode === 'direct' ? 'active-direct'  : '';
+    const custActive   = mode === 'custom' ? 'active-custom'  : '';
+    const custVisible  = mode === 'custom' ? 'visible'        : '';
+    const pathStatus   = discoveredPath
+      ? `<div class="path-status discovered">Discovered path: ${esc(discoveredPath)} — will be used next poll</div>`
+      : (mode === 'auto' ? '<div class="path-status">Auto: floods first, then discovers and locks in the path</div>' : '');
+
+    item.innerHTML = `
+      <div class="rep-body">
+        <div class="rep-grid">
+          <div><div class="field-label">Name</div><input type="text" placeholder="Node name" value="${esc(r.name)}" data-field="name"></div>
+          <div><div class="field-label">Public Key</div><input type="text" placeholder="pubkey hex" value="${esc(r.pubkey)}" data-field="pubkey"></div>
+          <button class="btn-danger" onclick="this.closest('.rep-item').remove()" style="align-self:end">Remove</button>
+        </div>
+        <div style="margin-top:0.65rem;">
+          <div class="field-label">Admin Password</div>
+          <input type="text" placeholder="password" value="${esc(r.admin_pass||'password')}" data-field="admin_pass">
+        </div>
+        <div style="margin-top:0.65rem;">
+          <div class="field-label">Routing Mode</div>
+          <div class="path-mode-row">
+            <button type="button" class="path-mode-btn ${autoActive}"
+              onclick="setPathMode(this,'auto')" title="Flood first poll, auto-discover and lock path">
+              🔍 Auto
+            </button>
+            <button type="button" class="path-mode-btn ${dirActive}"
+              onclick="setPathMode(this,'direct')" title="Direct zero-hop routing">
+              ⚡ Direct
+            </button>
+            <button type="button" class="path-mode-btn ${custActive}"
+              onclick="setPathMode(this,'custom')" title="Enter a custom hex path">
+              ✏ Custom Path
+            </button>
+          </div>
+          <input type="hidden" data-field="path_mode" value="${esc(mode)}">
+          <div class="path-custom-input ${custVisible}">
+            <input type="text" placeholder="4d,3c,ee (comma-separated hex bytes)"
+              value="${esc(r.path||'')}" data-field="path" style="margin-top:0.4rem;">
+          </div>
+          <input type="hidden" data-field="discovered_path" value="${esc(discoveredPath)}">
+          ${pathStatus}
+        </div>
+      </div>
+      <div class="rep-footer">
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;user-select:none;">
+          <div class="toggle-switch" style="width:36px;height:20px;">
+            <input type="checkbox" data-field="show_public" ${r.show_public?'checked':''}>
+            <span class="toggle-slider"></span>
+          </div>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:0.82rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-sec);">Show on public dashboard</span>
+        </label>
+      </div>`;
+    list.appendChild(item);
+  });
+}
+
+function setPathMode(btn, mode) {
+  const item = btn.closest('.rep-item');
+  // Clear all active classes
+  item.querySelectorAll('.path-mode-btn').forEach(b => {
+    b.classList.remove('active', 'active-direct', 'active-custom');
+  });
+  // Apply correct active class
+  const cls = mode === 'direct' ? 'active-direct' : mode === 'custom' ? 'active-custom' : 'active';
+  btn.classList.add(cls);
+  // Store mode
+  item.querySelector('[data-field="path_mode"]').value = mode;
+  // Show/hide custom path input
+  const custInput = item.querySelector('.path-custom-input');
+  if (custInput) custInput.classList.toggle('visible', mode === 'custom');
+  // Update status hint
+  const statusEl = item.querySelector('.path-status');
+  if (statusEl && mode !== 'custom') {
+    const disc = item.querySelector('[data-field="discovered_path"]')?.value || '';
+    if (disc && mode === 'auto') {
+      statusEl.textContent = 'Discovered path: ' + disc + ' — will be used next poll';
+      statusEl.className = 'path-status discovered';
+    } else if (mode === 'auto') {
+      statusEl.textContent = 'Auto: floods first, then discovers and locks in the path';
+      statusEl.className = 'path-status';
+    } else {
+      statusEl.textContent = 'Direct: zero-hop routing';
+      statusEl.className = 'path-status';
+    }
+  }
+}
+
+function addRepeater() {
+  const reps = getRepeaters();
+  reps.push({name:'',pubkey:'',admin_pass:'password',path:'',path_mode:'auto',show_public:false});
+  renderRepeaters(reps);
+  document.getElementById('repeaterList').lastElementChild?.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function getRepeaters() {
+  return Array.from(document.querySelectorAll('.rep-item')).map(item => {
+    const g = f => item.querySelector(`[data-field="${f}"]`);
+    return {
+      name:            g('name').value.trim(),
+      pubkey:          g('pubkey').value.trim(),
+      admin_pass:      g('admin_pass').value.trim() || 'password',
+      path_mode:       g('path_mode')?.value || 'auto',
+      path:            g('path')?.value.trim() || '',
+      discovered_path: g('discovered_path')?.value || '',
+      show_public:     g('show_public')?.checked || false,
+    };
+  });
+}
+
+async function saveSettings() {
+  // Fetch current settings as base so non-admins don't wipe companion config
+  const current = await fetch('/api/settings').then(r => r.json()).catch(() => ({}));
+  const body = {
+    ...current,
+    ntfy_topic:  document.getElementById('ntfy_topic').value.trim(),
+    ntfy_server: document.getElementById('ntfy_server').value.trim(),
+    repeaters:   getRepeaters(),
+  };
+  // Admins can also update companion and polling settings
+  if (isAdmin) {
+    const getNum = (id, def) => parseInt(document.getElementById(id)?.value) || def;
+    body.companion_host          = document.getElementById('companion_host')?.value.trim() || current.companion_host;
+    body.companion_port          = getNum('companion_port', 5000);
+    body.poll_interval_seconds   = getNum('poll_interval_seconds', 3600);
+    body.stagger_delay_seconds   = getNum('stagger_delay_seconds', 30);
+    body.stale_threshold_seconds = getNum('stale_threshold_seconds', 900);
+  }
+  const res  = await fetch('/api/settings', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data = await res.json();
+  if (data.ok) {
+    showToast('Settings saved — poller will reconnect shortly');
+    document.getElementById('saveStatus').textContent = 'Saved ' + new Date().toLocaleTimeString();
+    setTimeout(loadConnectionState, 3000);
+  } else { showToast(data.error||'Save failed', true); }
+}
+
+async function changePassword() {
+  const pw = document.getElementById('new_password').value;
+  if (!pw||pw.length<6) { showToast('Password must be at least 6 characters', true); return; }
+  const res  = await fetch('/api/users/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({new_password:pw})});
+  const data = await res.json();
+  if (data.ok) { showToast('Password updated'); document.getElementById('new_password').value=''; }
+  else showToast(data.error||'Error', true);
+}
+
+async function loadUsers() {
+  const data = await fetch('/api/users').then(r=>r.json()).catch(()=>({users:[]}));
+  document.getElementById('userList').innerHTML = (data.users||[]).map(u=>`
+    <div class="user-item">
+      <span class="user-name">${esc(u)}</span>
+      ${u==='admin'?'<span class="badge-admin">Admin</span>':''}
+      ${u!=='admin'?`<button class="btn-danger" onclick="deleteUser('${esc(u)}')">Delete</button>`:''}
+    </div>`).join('');
+}
+
+async function createUser() {
+  const username = document.getElementById('newUsername').value.trim();
+  const password = document.getElementById('newPassword').value;
+  if (!username||!password) { showToast('Username and password required', true); return; }
+  const res  = await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+  const data = await res.json();
+  if (data.ok) { showToast('User created: '+username); document.getElementById('newUsername').value=''; document.getElementById('newPassword').value=''; loadUsers(); }
+  else showToast(data.error||'Error', true);
+}
+
+async function deleteUser(username) {
+  if (!confirm('Delete "'+username+'"? This cannot be undone.')) return;
+  const res  = await fetch('/api/users/'+username,{method:'DELETE'});
+  const data = await res.json();
+  if (data.ok) { showToast('User deleted'); loadUsers(); }
+  else showToast(data.error||'Error', true);
+}
+
+function logout() { fetch('/logout',{method:'POST'}).then(()=>location.href='/login'); }
+
+function showToast(msg,isError=false) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast show'+(isError?' error':'');
+  clearTimeout(t._t); t._t=setTimeout(()=>{t.className='toast';},3500);
+}
+
+init();
+setInterval(loadConnectionState, 15000);
+</script>
 </body>
 </html>

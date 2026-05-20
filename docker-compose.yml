@@ -4,8 +4,9 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      # Persist settings and database outside the container.
-      - ./data/settings.json:/app/settings.json
+      # Persist user accounts, settings and database outside the container.
+      - ./data/users.json:/app/users.json
+      - ./data/sessions.json:/app/sessions.json
       - ./data/repeater_history.db:/app/repeater_history.db
       # Bind-mount source code so web-based updates persist across restarts.
       - ./app.py:/app/app.py

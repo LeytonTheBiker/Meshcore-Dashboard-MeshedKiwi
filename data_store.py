@@ -17,16 +17,22 @@ class RepeaterState:
     rssi: int = 0
     snr: float = 0.0
     noise_floor: int = 0
+    temperature: float = 0.0
     uptime_seconds: int = 0
     packets_recv: int = 0
     packets_sent: int = 0
+    packets_recv_direct: int = 0
+    packets_recv_flood: int = 0
+    packets_sent_direct: int = 0
+    packets_sent_flood: int = 0
     hops: int = 0
     route_path: str = ""
     lat: float = 0.0
     lon: float = 0.0
     fw_version: str = ""
     last_seen_epoch: float = 0.0
-    last_poll_ok: Optional[bool] = None  # None = never polled, True = ok, False = timed out
+    last_poll_ok: Optional[bool] = None
+    show_public: bool = False
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -37,24 +43,22 @@ class RepeaterState:
 
     @property
     def is_online(self) -> bool:
-        # Only green when the last poll got a response; red only on explicit failure
         return self.last_poll_ok is True
 
 
 class SQLiteLogHandler(logging.Handler):
-    """Logging handler that writes log records to the activity_log SQLite table."""
-
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, username: str):
         super().__init__()
         self.db_path = db_path
+        self.username = username
 
     def emit(self, record: logging.LogRecord):
         try:
             conn = sqlite3.connect(self.db_path)
             conn.execute(
-                "INSERT INTO activity_log (timestamp, level, logger_name, message) "
-                "VALUES (?, ?, ?, ?)",
-                (record.created, record.levelname, record.name, self.format(record)),
+                "INSERT INTO activity_log (timestamp, level, logger_name, message, username) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (record.created, record.levelname, record.name, self.format(record), self.username),
             )
             conn.commit()
             conn.close()
@@ -63,7 +67,10 @@ class SQLiteLogHandler(logging.Handler):
 
 
 class DataStore:
-    def __init__(self):
+    """Per-user data store, namespaced by username in the shared SQLite DB."""
+
+    def __init__(self, username: str):
+        self.username = username
         self._lock = threading.Lock()
         self._repeaters: Dict[str, RepeaterState] = {}
         self._db_path = cfg.HISTORY_DB if cfg.ENABLE_HISTORY else None
@@ -72,22 +79,32 @@ class DataStore:
 
     def _init_db(self):
         conn = sqlite3.connect(self._db_path)
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS telemetry_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp REAL NOT NULL,
+                username TEXT NOT NULL DEFAULT '',
                 pubkey TEXT NOT NULL,
                 name TEXT,
                 battery_mv INTEGER,
                 battery_voltage REAL,
+                temperature REAL,
                 rssi INTEGER,
                 snr REAL,
-                uptime_seconds INTEGER
+                noise_floor INTEGER,
+                uptime_seconds INTEGER,
+                packets_recv INTEGER,
+                packets_sent INTEGER,
+                packets_recv_direct INTEGER,
+                packets_recv_flood INTEGER,
+                packets_sent_direct INTEGER,
+                packets_sent_flood INTEGER
             )
         """)
         conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_telemetry_pubkey_ts
-            ON telemetry_log (pubkey, timestamp)
+            CREATE INDEX IF NOT EXISTS idx_telemetry_user_pubkey_ts
+            ON telemetry_log (username, pubkey, timestamp)
         """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS activity_log (
@@ -95,7 +112,8 @@ class DataStore:
                 timestamp REAL NOT NULL,
                 level TEXT NOT NULL,
                 logger_name TEXT NOT NULL,
-                message TEXT NOT NULL
+                message TEXT NOT NULL,
+                username TEXT NOT NULL DEFAULT ''
             )
         """)
         conn.execute("""
@@ -106,6 +124,7 @@ class DataStore:
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp REAL NOT NULL,
+                username TEXT NOT NULL DEFAULT '',
                 direction TEXT NOT NULL,
                 channel_idx INTEGER,
                 sender_pubkey TEXT,
@@ -118,26 +137,54 @@ class DataStore:
             )
         """)
         conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_messages_ts
-            ON messages (timestamp)
+            CREATE INDEX IF NOT EXISTS idx_messages_ts ON messages (timestamp)
         """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS node_names (
-                node_id TEXT PRIMARY KEY,
+                username TEXT NOT NULL DEFAULT '',
+                node_id TEXT NOT NULL,
                 name TEXT NOT NULL,
-                updated REAL NOT NULL
+                updated REAL NOT NULL,
+                PRIMARY KEY (username, node_id)
             )
         """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS advert_nodes (
-                pubkey TEXT PRIMARY KEY,
+                username TEXT NOT NULL DEFAULT '',
+                pubkey TEXT NOT NULL,
                 name TEXT NOT NULL,
                 lat REAL,
                 lon REAL,
-                last_seen REAL NOT NULL
+                last_seen REAL NOT NULL,
+                PRIMARY KEY (username, pubkey)
             )
         """)
-        # Migrate existing DB: add new columns if missing
+
+        # Migration: add username column to older tables if missing
+        for table in ("telemetry_log", "activity_log", "messages"):
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN username TEXT NOT NULL DEFAULT ''")
+            except Exception:
+                pass
+
+        # Migration: add extended packet/telemetry columns
+        extra_cols = [
+            ("temperature", "REAL"),
+            ("noise_floor", "INTEGER"),
+            ("packets_recv", "INTEGER"),
+            ("packets_sent", "INTEGER"),
+            ("packets_recv_direct", "INTEGER"),
+            ("packets_recv_flood", "INTEGER"),
+            ("packets_sent_direct", "INTEGER"),
+            ("packets_sent_flood", "INTEGER"),
+        ]
+        for col, typ in extra_cols:
+            try:
+                conn.execute(f"ALTER TABLE telemetry_log ADD COLUMN {col} {typ}")
+            except Exception:
+                pass
+
+        # Migration: messages extra columns
         for col, definition in [
             ("hops", "INTEGER DEFAULT -1"),
             ("path", "TEXT DEFAULT ''"),
@@ -147,45 +194,35 @@ class DataStore:
             try:
                 conn.execute(f"ALTER TABLE messages ADD COLUMN {col} {definition}")
             except Exception:
-                pass  # Column already exists
-        try:
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_messages_ack_code
-                ON messages (ack_code) WHERE ack_code != ''
-            """)
-        except Exception:
-            pass
+                pass
+
         conn.commit()
         conn.close()
 
-    def init_repeater(self, pubkey: str, name: str):
-        """Register a repeater from config. Called at startup."""
+    # ---- Repeater CRUD ----
+
+    def init_repeater(self, pubkey: str, name: str, show_public: bool = False):
         with self._lock:
             if pubkey not in self._repeaters:
-                self._repeaters[pubkey] = RepeaterState(name=name, pubkey=pubkey)
+                self._repeaters[pubkey] = RepeaterState(name=name, pubkey=pubkey, show_public=show_public)
             else:
-                # Update name if it changed in settings
                 self._repeaters[pubkey].name = name
+                self._repeaters[pubkey].show_public = show_public
 
     def remove_repeater(self, pubkey: str):
-        """Remove a repeater from the live store (when deleted from settings)."""
         with self._lock:
             self._repeaters.pop(pubkey, None)
 
     def sync_repeaters(self, configured: list):
-        """Sync store with configured repeater list. Add new, remove stale."""
         configured_keys = {r["pubkey"] for r in configured}
         with self._lock:
-            # Remove repeaters no longer in config
             for pk in list(self._repeaters.keys()):
                 if pk not in configured_keys:
                     del self._repeaters[pk]
-        # Add/update configured ones
         for r in configured:
-            self.init_repeater(r["pubkey"], r["name"])
+            self.init_repeater(r["pubkey"], r["name"], r.get("show_public", False))
 
     def reorder(self, pubkeys: list):
-        """Reorder the in-memory repeaters dict to match the given pubkey order."""
         with self._lock:
             ordered = {pk: self._repeaters[pk] for pk in pubkeys if pk in self._repeaters}
             for pk, v in self._repeaters.items():
@@ -194,21 +231,17 @@ class DataStore:
             self._repeaters = ordered
 
     def update_hops(self, pubkey: str, hops: int):
-        """Update hop count without touching last_seen."""
         with self._lock:
             if pubkey in self._repeaters:
                 self._repeaters[pubkey].hops = hops
 
     def update_route(self, pubkey: str, hops: int, route_path: str):
-        """Update hop count and route path without touching last_seen."""
         with self._lock:
             if pubkey in self._repeaters:
                 self._repeaters[pubkey].hops = hops
                 self._repeaters[pubkey].route_path = route_path
 
     def get_route_by_prefix(self, pubkey_prefix: str) -> tuple:
-        """Return (hops, route_path) for the first repeater whose pubkey starts with the given prefix.
-        Returns (-1, '') if not found."""
         if not pubkey_prefix:
             return (-1, "")
         pre = pubkey_prefix.lower()
@@ -220,24 +253,20 @@ class DataStore:
         return (-1, "")
 
     def update_location(self, pubkey: str, lat: float, lon: float):
-        """Update GPS coordinates without touching last_seen."""
         with self._lock:
             if pubkey in self._repeaters:
                 self._repeaters[pubkey].lat = lat
                 self._repeaters[pubkey].lon = lon
 
     def mark_poll_failed(self, pubkey: str):
-        """Mark the last poll as failed (status request timed out)."""
         with self._lock:
             if pubkey in self._repeaters:
                 self._repeaters[pubkey].last_poll_ok = False
 
     def update_repeater(self, pubkey: str, **kwargs):
-        """Update a repeater's state with new data from a poll response."""
         with self._lock:
             if pubkey not in self._repeaters:
                 self._repeaters[pubkey] = RepeaterState(pubkey=pubkey)
-
             r = self._repeaters[pubkey]
             for k, v in kwargs.items():
                 if hasattr(r, k) and v is not None:
@@ -253,18 +282,22 @@ class DataStore:
             r = self._repeaters.get(pubkey)
             if not r:
                 return
-            # Snapshot values under lock
             row = (
-                time.time(), r.pubkey, r.name, r.battery_mv,
-                r.battery_voltage, r.rssi, r.snr, r.uptime_seconds,
+                time.time(), self.username, r.pubkey, r.name,
+                r.battery_mv, r.battery_voltage, r.temperature,
+                r.rssi, r.snr, r.noise_floor, r.uptime_seconds,
+                r.packets_recv, r.packets_sent,
+                r.packets_recv_direct, r.packets_recv_flood,
+                r.packets_sent_direct, r.packets_sent_flood,
             )
-
         try:
             conn = sqlite3.connect(self._db_path)
             conn.execute(
                 "INSERT INTO telemetry_log "
-                "(timestamp, pubkey, name, battery_mv, battery_voltage, rssi, snr, uptime_seconds) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "(timestamp, username, pubkey, name, battery_mv, battery_voltage, temperature, "
+                "rssi, snr, noise_floor, uptime_seconds, packets_recv, packets_sent, "
+                "packets_recv_direct, packets_recv_flood, packets_sent_direct, packets_sent_flood) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 row,
             )
             conn.commit()
@@ -273,23 +306,24 @@ class DataStore:
             print(f"[DataStore] DB write error: {e}")
 
     def get_all(self) -> List[dict]:
-        """Return all repeater states as a JSON-serializable list."""
         with self._lock:
             return [r.to_dict() for r in self._repeaters.values()]
 
-    def get_history(self, pubkey: str, hours: int = 24) -> List[dict]:
-        """Return historical telemetry for a repeater over the last N hours."""
+    def get_history(self, pubkey: str, hours: int = 168) -> List[dict]:
+        """Return historical telemetry for a repeater over the last N hours (default 7 days)."""
         if not self._db_path:
             return []
         since = time.time() - (hours * 3600)
         try:
             conn = sqlite3.connect(self._db_path)
             rows = conn.execute(
-                "SELECT timestamp, battery_mv, battery_voltage, rssi, snr, uptime_seconds "
+                "SELECT timestamp, battery_mv, battery_voltage, temperature, rssi, snr, "
+                "noise_floor, uptime_seconds, packets_recv, packets_sent, "
+                "packets_recv_direct, packets_recv_flood, packets_sent_direct, packets_sent_flood "
                 "FROM telemetry_log "
-                "WHERE pubkey = ? AND timestamp > ? "
+                "WHERE username = ? AND pubkey = ? AND timestamp > ? "
                 "ORDER BY timestamp",
-                (pubkey, since),
+                (self.username, pubkey, since),
             ).fetchall()
             conn.close()
             return [
@@ -297,9 +331,17 @@ class DataStore:
                     "ts": row[0],
                     "battery_mv": row[1],
                     "battery_v": row[2],
-                    "rssi": row[3],
-                    "snr": row[4],
-                    "uptime": row[5],
+                    "temperature": row[3],
+                    "rssi": row[4],
+                    "snr": row[5],
+                    "noise_floor": row[6],
+                    "uptime": row[7],
+                    "packets_recv": row[8],
+                    "packets_sent": row[9],
+                    "packets_recv_direct": row[10],
+                    "packets_recv_flood": row[11],
+                    "packets_sent_direct": row[12],
+                    "packets_sent_flood": row[13],
                 }
                 for row in rows
             ]
@@ -308,22 +350,20 @@ class DataStore:
             return []
 
     def get_log_handler(self) -> logging.Handler:
-        """Return a logging handler that writes to the activity_log table."""
         if not self._db_path:
             return logging.NullHandler()
-        handler = SQLiteLogHandler(self._db_path)
+        handler = SQLiteLogHandler(self._db_path, self.username)
         handler.setFormatter(logging.Formatter("%(message)s"))
         return handler
 
     def get_activity_logs(self, hours: int = 24, level: str = None, search: str = None, limit: int = 500) -> list:
-        """Return recent activity log entries, optionally filtered by level and message text."""
         if not self._db_path:
             return []
         since = time.time() - (hours * 3600)
         try:
             conn = sqlite3.connect(self._db_path)
-            where = "WHERE timestamp > ?"
-            params: list = [since]
+            where = "WHERE username = ? AND timestamp > ?"
+            params: list = [self.username, since]
             if level:
                 where += " AND level = ?"
                 params.append(level.upper())
@@ -338,66 +378,53 @@ class DataStore:
                 params,
             ).fetchall()
             conn.close()
-            return [
-                {
-                    "id": row[0],
-                    "ts": row[1],
-                    "level": row[2],
-                    "logger": row[3],
-                    "message": row[4],
-                }
-                for row in rows
-            ]
+            return [{"id": r[0], "ts": r[1], "level": r[2], "logger": r[3], "message": r[4]} for r in rows]
         except Exception as e:
             print(f"[DataStore] Activity log read error: {e}")
             return []
 
     def store_message(self, direction: str, channel_idx, sender_pubkey: str, sender_name: str, text: str,
                       hops: int = -1, path: str = "", ack_code: str = "") -> bool:
-        """Store an incoming or outgoing message, skipping duplicates.
-        Returns True if the message was new, False if it was a duplicate."""
         if not self._db_path:
-            return True  # no DB — treat as new so callers still act on it
+            return True
         try:
             conn = sqlite3.connect(self._db_path)
-            since = time.time() - 300  # dedup window: 5 minutes
+            since = time.time() - 300
             existing = conn.execute(
-                "SELECT id FROM messages WHERE direction=? AND channel_idx IS ? "
+                "SELECT id FROM messages WHERE username=? AND direction=? AND channel_idx IS ? "
                 "AND sender_pubkey=? AND text=? AND timestamp > ?",
-                (direction, channel_idx, sender_pubkey or "", text, since),
+                (self.username, direction, channel_idx, sender_pubkey or "", text, since),
             ).fetchone()
             if existing:
                 conn.close()
-                return False  # duplicate — skip
+                return False
             conn.execute(
                 "INSERT INTO messages "
-                "(timestamp, direction, channel_idx, sender_pubkey, sender_name, text, hops, path, ack_code) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (time.time(), direction, channel_idx, sender_pubkey or "", sender_name or "", text,
+                "(timestamp, username, direction, channel_idx, sender_pubkey, sender_name, text, hops, path, ack_code) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (time.time(), self.username, direction, channel_idx, sender_pubkey or "", sender_name or "", text,
                  hops, path or "", ack_code or ""),
             )
             conn.commit()
             conn.close()
-            return True  # new message
+            return True
         except Exception as e:
             print(f"[DataStore] Message store error: {e}")
-            return True  # on error, assume new so we don't silently drop notifications
+            return True
 
     def increment_message_acks(self, ack_code: str) -> int:
-        """Increment ack count for the outgoing message matching ack_code.
-        Returns the new total ack count, or 0 if not found."""
         if not self._db_path or not ack_code:
             return 0
         try:
             conn = sqlite3.connect(self._db_path)
             conn.execute(
                 "UPDATE messages SET acks = acks + 1 "
-                "WHERE ack_code = ? AND direction = 'out'",
-                (ack_code,),
+                "WHERE username = ? AND ack_code = ? AND direction = 'out'",
+                (self.username, ack_code),
             )
             row = conn.execute(
-                "SELECT acks FROM messages WHERE ack_code = ? AND direction = 'out'",
-                (ack_code,),
+                "SELECT acks FROM messages WHERE username = ? AND ack_code = ? AND direction = 'out'",
+                (self.username, ack_code),
             ).fetchone()
             conn.commit()
             conn.close()
@@ -407,7 +434,6 @@ class DataStore:
             return 0
 
     def get_messages(self, channel_idx=None, hours: int = 48, limit: int = 200) -> list:
-        """Return recent messages, optionally filtered by channel."""
         if not self._db_path:
             return []
         since = time.time() - (hours * 3600)
@@ -417,32 +443,26 @@ class DataStore:
                 rows = conn.execute(
                     "SELECT id, timestamp, direction, channel_idx, sender_pubkey, sender_name, "
                     "text, hops, path, acks, ack_code "
-                    "FROM messages WHERE timestamp > ? AND channel_idx = ? "
+                    "FROM messages WHERE username=? AND timestamp > ? AND channel_idx = ? "
                     "ORDER BY timestamp DESC LIMIT ?",
-                    (since, channel_idx, limit),
+                    (self.username, since, channel_idx, limit),
                 ).fetchall()
             else:
                 rows = conn.execute(
                     "SELECT id, timestamp, direction, channel_idx, sender_pubkey, sender_name, "
                     "text, hops, path, acks, ack_code "
-                    "FROM messages WHERE timestamp > ? "
+                    "FROM messages WHERE username=? AND timestamp > ? "
                     "ORDER BY timestamp DESC LIMIT ?",
-                    (since, limit),
+                    (self.username, since, limit),
                 ).fetchall()
             conn.close()
             return [
                 {
-                    "id": row[0],
-                    "ts": row[1],
-                    "direction": row[2],
-                    "channel_idx": row[3],
-                    "sender_pubkey": row[4],
-                    "sender_name": row[5],
-                    "text": row[6],
+                    "id": row[0], "ts": row[1], "direction": row[2],
+                    "channel_idx": row[3], "sender_pubkey": row[4],
+                    "sender_name": row[5], "text": row[6],
                     "hops": row[7] if row[7] is not None else -1,
-                    "path": row[8] or "",
-                    "acks": row[9] or 0,
-                    "ack_code": row[10] or "",
+                    "path": row[8] or "", "acks": row[9] or 0, "ack_code": row[10] or "",
                 }
                 for row in rows
             ]
@@ -451,20 +471,19 @@ class DataStore:
             return []
 
     def upsert_advert_node(self, pubkey: str, name: str, lat: float = None, lon: float = None):
-        """Upsert a node discovered via advert packet."""
         if not self._db_path or not pubkey or not name:
             return
         try:
             conn = sqlite3.connect(self._db_path)
             conn.execute(
-                """INSERT INTO advert_nodes (pubkey, name, lat, lon, last_seen)
-                   VALUES (?, ?, ?, ?, ?)
-                   ON CONFLICT(pubkey) DO UPDATE SET
+                """INSERT INTO advert_nodes (username, pubkey, name, lat, lon, last_seen)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(username, pubkey) DO UPDATE SET
                      name=excluded.name,
                      lat=COALESCE(excluded.lat, advert_nodes.lat),
                      lon=COALESCE(excluded.lon, advert_nodes.lon),
                      last_seen=excluded.last_seen""",
-                (pubkey, name, lat, lon, time.time())
+                (self.username, pubkey, name, lat, lon, time.time())
             )
             conn.commit()
             conn.close()
@@ -472,13 +491,14 @@ class DataStore:
             print(f"[DataStore] Advert node upsert error: {e}")
 
     def get_advert_nodes(self) -> list:
-        """Return all advert-discovered nodes."""
         if not self._db_path:
             return []
         try:
             conn = sqlite3.connect(self._db_path)
             rows = conn.execute(
-                "SELECT pubkey, name, lat, lon, last_seen FROM advert_nodes ORDER BY last_seen DESC"
+                "SELECT pubkey, name, lat, lon, last_seen FROM advert_nodes "
+                "WHERE username = ? ORDER BY last_seen DESC",
+                (self.username,),
             ).fetchall()
             conn.close()
             return [{"pubkey": r[0], "name": r[1], "lat": r[2], "lon": r[3], "last_seen": r[4]} for r in rows]
@@ -487,12 +507,13 @@ class DataStore:
             return []
 
     def load_node_names(self) -> dict:
-        """Load persisted node ID → name cache from DB."""
         if not self._db_path:
             return {}
         try:
             conn = sqlite3.connect(self._db_path)
-            rows = conn.execute("SELECT node_id, name FROM node_names").fetchall()
+            rows = conn.execute(
+                "SELECT node_id, name FROM node_names WHERE username = ?", (self.username,)
+            ).fetchall()
             conn.close()
             return {row[0]: row[1] for row in rows}
         except Exception as e:
@@ -500,15 +521,14 @@ class DataStore:
             return {}
 
     def save_node_names(self, cache: dict):
-        """Persist node ID → name cache to DB (upsert all entries)."""
         if not self._db_path or not cache:
             return
         try:
             now = time.time()
             conn = sqlite3.connect(self._db_path)
             conn.executemany(
-                "INSERT OR REPLACE INTO node_names (node_id, name, updated) VALUES (?, ?, ?)",
-                [(node_id, name, now) for node_id, name in cache.items()]
+                "INSERT OR REPLACE INTO node_names (username, node_id, name, updated) VALUES (?, ?, ?, ?)",
+                [(self.username, node_id, name, now) for node_id, name in cache.items()]
             )
             conn.commit()
             conn.close()
@@ -516,13 +536,12 @@ class DataStore:
             print(f"[DataStore] Node names save error: {e}")
 
     def prune_activity_logs(self, retention_hours: int):
-        """Delete activity log entries older than retention_hours."""
         if not self._db_path:
             return
         cutoff = time.time() - (retention_hours * 3600)
         try:
             conn = sqlite3.connect(self._db_path)
-            conn.execute("DELETE FROM activity_log WHERE timestamp < ?", (cutoff,))
+            conn.execute("DELETE FROM activity_log WHERE username = ? AND timestamp < ?", (self.username, cutoff))
             conn.commit()
             conn.close()
         except Exception as e:

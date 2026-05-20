@@ -22,7 +22,8 @@ class MeshcorePoller:
     (companion IP, repeater list, timing) take effect without restart.
     """
 
-    def __init__(self, store: DataStore):
+    def __init__(self, store: DataStore, username: str = "admin"):
+        self.username = username
         self.store = store
         self.mc: MeshCore = None
         self._running = False
@@ -43,6 +44,10 @@ class MeshcorePoller:
         self._advert_sub = None              # node advertisement beacons
         self._telemetry_sub = None           # companion base telemetry (battery)
         self._polling_enabled = True         # duty-cycle auto-poll on/off
+        # Poll queue tracking
+        self._poll_queue: list = []
+        self._current_poll: dict = None
+        self._last_cycle_ts: float = 0
         self._recent_events: deque = deque(maxlen=200)  # live mesh activity feed
         self._node_id_name_cache: dict = self.store.load_node_names()  # pubkey first-byte (2 hex chars) → node name
         self._contact_routes: dict = {}      # pubkey_prefix (upper) → (hops, route_path) for all contacts
@@ -81,22 +86,43 @@ class MeshcorePoller:
     def device_channels(self) -> list:
         return list(self._device_channels)
 
+    @property
+    def auto_reconnect_enabled(self) -> bool:
+        return not self._stay_disconnected
+
+    def enable_auto_reconnect(self):
+        self._stay_disconnected = False
+        if not self.is_connected:
+            self._needs_reconnect = True
+        logger.info(f"[{self.username}] Auto-reconnect enabled")
+
+    def disable_auto_reconnect(self):
+        self._stay_disconnected = True
+        logger.info(f"[{self.username}] Auto-reconnect disabled")
+
     async def start(self):
         """Main entry point. Runs forever, reconnecting on errors."""
         self._running = True
 
         # Register any initially configured repeaters
-        for r in cfg.get_repeaters():
-            self.store.init_repeater(r["pubkey"], r["name"])
+        for r in cfg.get_repeaters(self.username):
+            self.store.init_repeater(r["pubkey"], r["name"], r.get("show_public", False))
 
         while self._running:
             if self._stay_disconnected:
                 await asyncio.sleep(1)
                 continue
+            # Skip connection if host isn't configured yet
+            host = cfg.get_companion_host(self.username)
+            if not host or host in ("", "192.168.1.100"):
+                # Default placeholder — wait for user to configure settings
+                logger.debug(f"[{self.username}] No companion host configured, waiting...")
+                await asyncio.sleep(5)
+                continue
             try:
                 await self._connect_and_poll()
             except Exception as e:
-                logger.error(f"Poller error: {e}", exc_info=True)
+                logger.error(f"[{self.username}] Poller error: {e}", exc_info=True)
                 if self.mc:
                     try:
                         await self.mc.disconnect()
@@ -104,9 +130,10 @@ class MeshcorePoller:
                         pass
                     self.mc = None
                 if self._stay_disconnected:
+                    logger.info(f"[{self.username}] Auto-reconnect disabled — staying disconnected.")
                     continue
-                logger.info("Reconnecting in 10 seconds...")
-                await asyncio.sleep(10)
+                logger.info(f"[{self.username}] Reconnecting in 15 seconds...")
+                await asyncio.sleep(15)
 
     async def stop(self):
         self._running = False
@@ -141,24 +168,23 @@ class MeshcorePoller:
         return self._polling_enabled
 
     async def _connect_and_poll(self):
-        host = cfg.get_companion_host()
-        port = cfg.get_companion_port()
+        host = cfg.get_companion_host(self.username)
+        port = cfg.get_companion_port(self.username)
         self._current_host = host
         self._current_port = port
         self._needs_reconnect = False
 
-        logger.info(f"Connecting to companion at {host}:{port}")
+        logger.info(f"[{self.username}] Connecting to companion at {host}:{port}")
         self.mc = await MeshCore.create_tcp(
             host,
             port,
-            auto_reconnect=True,
-            max_reconnect_attempts=5,
+            auto_reconnect=False,   # We handle reconnect in our own loop
         )
-        logger.info("Connected to companion device")
+        logger.info(f"[{self.username}] Connected to companion device")
         if self.mc and hasattr(self.mc, "self_info") and self.mc.self_info:
-            logger.info(f"Self info: {self.mc.self_info}")
+            logger.info(f"[{self.username}] Self info: {self.mc.self_info}")
         else:
-            logger.info("Self info not available after connect")
+            logger.info(f"[{self.username}] Self info not available after connect")
 
         await self._refresh_contacts()
         await self._fetch_device_channels()
@@ -167,18 +193,18 @@ class MeshcorePoller:
 
         while self._running and not self._needs_reconnect and not self._stay_disconnected:
             # Re-read config each cycle for dynamic updates
-            repeaters = cfg.get_repeaters()
-            poll_interval = cfg.get_poll_interval()
+            repeaters = cfg.get_repeaters(self.username)
+            poll_interval = cfg.get_poll_interval(self.username)
 
             # Sync the store with current repeater list
             for r in repeaters:
-                self.store.init_repeater(r["pubkey"], r["name"])
+                self.store.init_repeater(r["pubkey"], r["name"], r.get("show_public", False))
 
             # Check if companion IP changed
-            new_host = cfg.get_companion_host()
-            new_port = cfg.get_companion_port()
+            new_host = cfg.get_companion_host(self.username)
+            new_port = cfg.get_companion_port(self.username)
             if new_host != self._current_host or new_port != self._current_port:
-                logger.info(f"Companion address changed to {new_host}:{new_port}, reconnecting...")
+                logger.info(f"[{self.username}] Companion address changed to {new_host}:{new_port}, reconnecting...")
                 break
 
             cycle_start = time.monotonic()
@@ -520,7 +546,7 @@ class MeshcorePoller:
 
     async def _send_ntfy(self, title: str, message: str):
         """Fire a push notification via ntfy if a topic is configured and notifications are enabled."""
-        s = cfg.get_settings()
+        s = cfg.get_settings(self.username)
         if not s.get("ntfy_enabled", True):
             return
         topic = s.get("ntfy_topic", "").strip()
@@ -608,7 +634,7 @@ class MeshcorePoller:
             # Update configured repeater store if this matches one
             matched_pubkey = None
             matched_name = None
-            for r in cfg.get_repeaters():
+            for r in cfg.get_repeaters(self.username):
                 pk = r["pubkey"]
                 if pk.startswith(pubkey_pre) or pubkey_pre.startswith(pk):
                     matched_pubkey = pk
@@ -1038,10 +1064,105 @@ class MeshcorePoller:
             await asyncio.sleep(min(remaining, 0.5))
             remaining -= 0.5
 
+    def get_poll_queue_state(self) -> dict:
+        import time as _t
+        repeaters = cfg.get_repeaters(self.username)
+        queue_items = []
+        for r in repeaters:
+            pubkey = r.get("pubkey", "")
+            name   = r.get("name", pubkey[:8])
+            entry  = next((e for e in self._poll_queue if e["pubkey"] == pubkey), None)
+            if entry:
+                queue_items.append(dict(entry))
+            else:
+                queue_items.append({
+                    "pubkey": pubkey, "name": name, "status": "waiting",
+                    "ts_queued": None, "ts_start": None, "ts_end": None, "error": None,
+                })
+        poll_interval = cfg.get_poll_interval(self.username)
+        next_in = max(0, round(self._last_cycle_ts + poll_interval - _t.time())) if self._last_cycle_ts else None
+        return {
+            "queue": queue_items,
+            "connected": self.is_connected,
+            "current_pubkey": self._current_poll["pubkey"] if self._current_poll else None,
+            "last_cycle_ts": self._last_cycle_ts,
+            "next_cycle_in": next_in,
+            "polling_enabled": self._polling_enabled,
+        }
+
+    async def _ensure_contact_exists(self, pubkey: str, name: str):
+        """
+        If the configured pubkey does not exist as a contact on the companion,
+        add it with flood routing and the configured name.
+        Returns the contact dict if found/added successfully, or None on failure.
+        """
+        # Normalise pubkey to lowercase hex
+        pubkey = pubkey.strip().lower()
+
+        # Already known?
+        contact = self._find_contact(pubkey)
+        if contact is not None:
+            return contact
+
+        # Validate pubkey looks like a 64-char hex string
+        if len(pubkey) < 8 or not all(c in "0123456789abcdef" for c in pubkey):
+            logger.warning(f"[{name}] Invalid pubkey '{pubkey[:16]}' — cannot auto-add contact")
+            return None
+
+        # Pad pubkey to 64 hex chars (32 bytes) if shorter
+        pk_full = pubkey.ljust(64, "0")
+
+        logger.info(f"[{name}] Contact not found — attempting to add pubkey {pubkey[:16]}...")
+
+        # Build a minimal contact dict matching the structure expected by add_contact()
+        # (same fields populated by reader.py when the companion sends a CONTACT event)
+        new_contact = {
+            "public_key":        pk_full,
+            "type":              0,      # 0 = repeater/node (standard type)
+            "flags":             0,
+            "out_path_len":      -1,     # -1 = flood routing (default)
+            "out_path_hash_mode": -1,
+            "out_path":          "",
+            "adv_name":          name[:31],   # max 32 chars including null
+            "last_advert":       0,
+            "adv_lat":           0.0,
+            "adv_lon":           0.0,
+        }
+
+        try:
+            result = await self.mc.commands.add_contact(new_contact)
+            if result.type == EventType.ERROR:
+                logger.warning(f"[{name}] add_contact failed: {result.payload}")
+                return None
+
+            logger.info(f"[{name}] Contact added successfully — refreshing contact list")
+            self._log_event("contact_added", name=name, pubkey=pubkey)
+
+            # Refresh so the new contact is in our local cache
+            await self._refresh_contacts()
+
+            # Look it up again
+            contact = self._find_contact(pubkey)
+            if contact is None:
+                logger.warning(f"[{name}] Contact was added but still not found after refresh")
+            return contact
+
+        except Exception as e:
+            logger.error(f"[{name}] Exception adding contact: {e}")
+            return None
+
     async def _poll_all_repeaters(self, repeaters: list):
         """Poll each configured repeater with staggered delays."""
+        import time as _t
         await self._refresh_contacts()
-        stagger = cfg.get_stagger_delay()
+        stagger = cfg.get_stagger_delay(self.username)
+        self._last_cycle_ts = _t.time()
+        self._poll_queue = [
+            {"pubkey": r["pubkey"], "name": r.get("name", r["pubkey"][:8]),
+             "status": "waiting", "ts_queued": _t.time(),
+             "ts_start": None, "ts_end": None, "error": None}
+            for r in repeaters if r.get("pubkey")
+        ]
 
         for i, repeater_cfg in enumerate(repeaters):
             if not self._running or self._needs_reconnect or self._stay_disconnected:
@@ -1052,13 +1173,24 @@ class MeshcorePoller:
 
             contact = self._find_contact(pubkey)
             if contact is None:
-                logger.warning(
-                    f"[{name}] No contact found for pubkey {pubkey[:16]}... "
-                    f"(is the repeater in range?)"
-                )
-                if i < len(repeaters) - 1:
-                    await asyncio.sleep(stagger)
-                continue
+                logger.info(f"[{name}] Contact not in companion — attempting auto-add for {pubkey[:16]}...")
+                contact = await self._ensure_contact_exists(pubkey, name)
+                if contact is None:
+                    logger.warning(
+                        f"[{name}] Could not add contact for pubkey {pubkey[:16]} — skipping this poll cycle. "
+                        f"Check that the pubkey is correct."
+                    )
+                    self.store.mark_poll_failed(pubkey)
+                    for _qe in self._poll_queue:
+                        if _qe["pubkey"] == pubkey:
+                            _qe["status"] = "failed"; _qe["ts_end"] = _t.time()
+                            _qe["error"] = "Contact not found / could not be added"
+                            break
+                    self._current_poll = None
+                    if i < len(repeaters) - 1:
+                        await asyncio.sleep(stagger)
+                    continue
+                logger.info(f"[{name}] Contact auto-added — proceeding with poll")
 
             # Extract hop count and route path from contact
             # MeshCore library uses out_path_len / out_path (not hops/path)
@@ -1115,10 +1247,16 @@ class MeshcorePoller:
 
             route_desc = route_path if route_path else ("direct" if hops > 0 else "flood")
             logger.info(f"[{name}] Polling repeater ({i+1}/{len(repeaters)}), hops={hops}, route={route_desc}...")
+            for _qe in self._poll_queue:
+                if _qe["pubkey"] == pubkey:
+                    _qe["status"] = "polling"; _qe["ts_start"] = _t.time()
+                    break
+            self._current_poll = {"pubkey": pubkey, "name": name}
 
-            # Apply custom path if configured, otherwise use flood
+            # Apply path based on path_mode setting
+            path_mode   = repeater_cfg.get("path_mode", "auto").strip().lower()
             custom_path = repeater_cfg.get("path", "").strip()
-            await self._apply_path(contact, pubkey, name, custom_path)
+            await self._apply_path_by_mode(contact, pubkey, name, path_mode, custom_path)
 
             # Login to repeater before requesting data
             admin_pass = repeater_cfg.get("admin_pass", "password")
@@ -1133,6 +1271,19 @@ class MeshcorePoller:
                 break
 
             await self._request_telemetry(pubkey, name, contact)
+
+            # Auto mode: run path discovery and save result back to config
+            path_mode = repeater_cfg.get("path_mode", "auto").strip().lower()
+            if path_mode == "auto":
+                discovered = await self._auto_discover_and_save(contact, pubkey, name)
+                if discovered:
+                    logger.info(f"[{name}] Auto-path discovered and saved: {discovered}")
+
+            for _qe in self._poll_queue:
+                if _qe["pubkey"] == pubkey:
+                    _qe["status"] = "complete"; _qe["ts_end"] = _t.time()
+                    break
+            self._current_poll = None
 
             if i < len(repeaters) - 1:
                 logger.debug(f"Waiting {stagger}s before next repeater")
@@ -1197,20 +1348,94 @@ class MeshcorePoller:
         except Exception as e:
             logger.debug(f"[{name}] Path discovery error: {e}")
 
-    async def _apply_path(self, contact, pubkey: str, name: str, custom_path: str):
-        """Apply a custom route path or reset to flood if empty."""
+    async def _apply_path_by_mode(self, contact, pubkey: str, name: str, path_mode: str, custom_path: str):
+        """Apply routing based on path_mode: auto, direct, or custom."""
         try:
-            if custom_path:
-                # Parse comma-separated hex bytes like "4d,3c,ee"
+            if path_mode == "direct":
+                # Zero-hop: tell the companion to route directly (path length 0)
+                await self.mc.commands.change_contact_path(contact, b"")
+                logger.info(f"[{name}] Using direct (zero-hop) routing")
+            elif path_mode == "custom" and custom_path:
+                # Explicit hex path e.g. "4d,3c,ee"
                 hex_parts = [p.strip() for p in custom_path.replace(" ", "").split(",") if p.strip()]
                 path_bytes = bytes(int(h, 16) for h in hex_parts)
                 await self.mc.commands.change_contact_path(contact, path_bytes)
                 logger.info(f"[{name}] Set custom path: {' > '.join(hex_parts)}")
             else:
+                # Auto or no path: flood routing for this poll cycle
                 await self.mc.commands.reset_path(pubkey)
-                logger.debug(f"[{name}] Using flood routing")
+                logger.debug(f"[{name}] Using flood routing (auto-discovery will follow)")
         except Exception as e:
             logger.error(f"[{name}] Path update error: {e}")
+
+    async def _apply_path(self, contact, pubkey: str, name: str, custom_path: str):
+        """Legacy wrapper — apply a custom route path or reset to flood."""
+        await self._apply_path_by_mode(
+            contact, pubkey, name,
+            "custom" if custom_path else "auto",
+            custom_path
+        )
+
+    async def _auto_discover_and_save(self, contact, pubkey: str, name: str):
+        """
+        Run path discovery and, if successful, save the discovered path back to
+        users.json so the next poll uses it directly instead of flooding.
+        Returns the discovered path string, or None if discovery failed.
+        """
+        try:
+            result = await self.mc.commands.send_path_discovery(contact)
+            if result.type == EventType.ERROR:
+                logger.debug(f"[{name}] Auto path discovery send failed")
+                return None
+
+            response = await self.mc.wait_for_event(
+                EventType.PATH_RESPONSE,
+                attribute_filters={"pubkey_pre": pubkey[:12]},
+                timeout=15,
+            )
+            if response is None:
+                logger.debug(f"[{name}] Auto path discovery timed out — staying on flood")
+                return None
+
+            payload   = response.payload
+            new_hops  = payload.get("out_path_len", -1)
+            raw_path  = payload.get("out_path", "")
+
+            if new_hops < 0:
+                return None
+
+            # Build human-readable path string and comma-separated hex for storage
+            disc_route = ""
+            hex_csv    = ""
+            if isinstance(raw_path, bytes) and raw_path:
+                disc_route = " > ".join(f"{b:02x}" for b in raw_path)
+                hex_csv    = ",".join(f"{b:02x}" for b in raw_path)
+            elif isinstance(raw_path, str) and raw_path:
+                segs = [raw_path[i:i+2] for i in range(0, len(raw_path), 2) if len(raw_path[i:i+2]) == 2]
+                disc_route = " > ".join(segs)
+                hex_csv    = ",".join(segs)
+
+            # Update in-memory store
+            self.store.update_route(pubkey, new_hops, disc_route)
+            logger.info(f"[{name}] Auto-discovered path: hops={new_hops}, route={disc_route or 'direct'}")
+
+            # Persist back to users.json: change mode to "custom" with the discovered path
+            # so future polls use this path directly
+            import config as _cfg
+            settings = _cfg.get_settings(self.username)
+            for r in settings.get("repeaters", []):
+                if r.get("pubkey") == pubkey:
+                    r["path_mode"] = "custom"
+                    r["path"]      = hex_csv
+                    r["discovered_path"] = disc_route
+                    break
+            _cfg.save_settings(self.username, settings)
+            self._log_event("path", name=name, pubkey=pubkey, hops=new_hops, route=disc_route)
+            return disc_route or "direct"
+
+        except Exception as e:
+            logger.debug(f"[{name}] Auto path discovery error: {e}")
+            return None
 
     async def _login_to_repeater(self, contact, name: str, password: str):
         """Login to a repeater so it responds to status/telemetry requests."""
@@ -1258,6 +1483,16 @@ class MeshcorePoller:
                 updates["packets_recv"] = status["nb_recv"]
             if "nb_sent" in status:
                 updates["packets_sent"] = status["nb_sent"]
+
+            # Direct / flood breakdown (firmware v1.8+)
+            if "recv_direct" in status:
+                updates["packets_recv_direct"] = status["recv_direct"]
+            if "recv_flood" in status:
+                updates["packets_recv_flood"] = status["recv_flood"]
+            if "sent_direct" in status:
+                updates["packets_sent_direct"] = status["sent_direct"]
+            if "sent_flood" in status:
+                updates["packets_sent_flood"] = status["sent_flood"]
 
             # Firmware version — try several key names used across firmware versions
             for fw_key in ("fw_version", "fw_ver", "firmware_version", "firmware", "version"):
@@ -1310,22 +1545,25 @@ class MeshcorePoller:
         if not self.mc:
             return {"ok": False, "error": "Not connected to companion device"}
 
-        contact = self._find_contact(pubkey)
-        if contact is None:
-            await self._refresh_contacts()
-            contact = self._find_contact(pubkey)
-        if contact is None:
-            return {"ok": False, "error": "Repeater not found in contacts — may be out of range"}
-
-        # Find name and admin password from config
+        # Find name and admin password from config first (needed for auto-add)
         name = pubkey[:8]
         admin_pass = "password"
-        for r in cfg.get_repeaters():
+        for r in cfg.get_repeaters(self.username):
             pk = r["pubkey"]
             if pk == pubkey or pk.startswith(pubkey) or pubkey.startswith(pk):
                 admin_pass = r.get("admin_pass", "password")
                 name = r.get("name", name)
                 break
+
+        contact = self._find_contact(pubkey)
+        if contact is None:
+            await self._refresh_contacts()
+            contact = self._find_contact(pubkey)
+        if contact is None:
+            # Auto-add the contact to the companion
+            contact = await self._ensure_contact_exists(pubkey, name)
+        if contact is None:
+            return {"ok": False, "error": "Could not find or add contact — check the pubkey is correct"}
 
         start = time.monotonic()
         try:
@@ -1355,7 +1593,7 @@ class MeshcorePoller:
 
         name = pubkey[:8]
         admin_pass = "password"
-        for r in cfg.get_repeaters():
+        for r in cfg.get_repeaters(self.username):
             pk = r["pubkey"]
             if pk == pubkey or pk.startswith(pubkey) or pubkey.startswith(pk):
                 admin_pass = r.get("admin_pass", "password")

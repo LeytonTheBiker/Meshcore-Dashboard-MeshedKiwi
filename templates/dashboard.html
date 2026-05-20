@@ -1,116 +1,828 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MeshCore Repeater Dashboard</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MeshCore Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green-dark:   #2d5016;
+    --green-mid:    #4a7c24;
+    --green-light:  #c8e6c9;
+    --green-pale:   #f0f7ee;
+    --green-border: #b8d4b0;
+    --bg:           #f5f5f0;
+    --surface:      #ffffff;
+    --surface2:     #f8faf6;
+    --border:       #dde8d6;
+    --border-mid:   #c0d4b4;
+    --text:         #1a1a1a;
+    --text-sec:     #4a5a3a;
+    --muted:        #7a8a6a;
+    --online:       #2d7a22;
+    --offline:      #b91c1c;
+    --warn:         #92400e;
+    --danger:       #b91c1c;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Lato', sans-serif; font-size: 14px; min-height: 100vh; }
+
+  /* NAV */
+  nav {
+    background: var(--green-dark);
+    display: flex; align-items: center;
+    padding: 0 1.5rem; height: 52px; gap: 1.4rem;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  .nav-brand {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.2rem; font-weight: 700; color: #fff;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-right: auto; display: flex; align-items: center; gap: 0.4rem; text-decoration: none;
+  }
+  nav a {
+    color: rgba(255,255,255,0.65); text-decoration: none;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; padding: 0.2rem 0;
+    border-bottom: 2px solid transparent; transition: color 0.15s; white-space: nowrap;
+  }
+  nav a:hover  { color: #fff; }
+  nav a.active { color: #fff; border-bottom-color: var(--green-light); }
+  .nav-right { display: flex; align-items: center; gap: 0.5rem; margin-left: 0.5rem; }
+  .conn-pill {
+    display: flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.65rem;
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 20px; font-family: monospace; font-size: 0.7rem; color: rgba(255,255,255,0.75);
+  }
+  .conn-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.3); flex-shrink: 0; transition: background 0.3s; }
+  .conn-dot.online  { background: #4ade80; }
+  .conn-dot.offline { background: #f87171; }
+  .nav-user {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.85rem; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--green-light);
+  }
+  .btn-nav {
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25);
+    color: rgba(255,255,255,0.75); padding: 0.25rem 0.75rem;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.8rem; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; border-radius: 4px; transition: all 0.15s;
+  }
+  .btn-nav:hover { background: rgba(255,255,255,0.18); color: #fff; }
+
+  /* MAIN */
+  main { padding: 1.25rem 1.5rem; max-width: 1600px; margin: 0 auto; }
+  .page-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; }
+  .page-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 1.4rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em; color: var(--green-dark);
+  }
+  .page-header-right { margin-left: auto; display: flex; gap: 0.5rem; align-items: center; }
+  .badge {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.78rem; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; padding: 0.2rem 0.7rem;
+    border: 1px solid var(--green-border); border-radius: 20px; color: var(--green-mid); background: var(--green-pale);
+  }
+
+  /* GRID */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 0.85rem; }
+
+  /* TILE */
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; box-shadow: 0 1px 4px rgba(45,80,22,0.06); transition: box-shadow 0.2s; }
+  .tile:hover { box-shadow: 0 4px 16px rgba(45,80,22,0.12); }
+  .tile-top-bar { height: 3px; background: var(--border); transition: background 0.3s; }
+  .tile.online  .tile-top-bar { background: linear-gradient(90deg, var(--green-dark), var(--green-mid)); }
+  .tile.offline .tile-top-bar { background: var(--offline); }
+  .tile-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.7rem 1rem; border-bottom: 1px solid var(--border); background: var(--green-pale); }
+  .tile-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background 0.3s; }
+  .tile.online  .tile-status-dot { background: var(--online); }
+  .tile.offline .tile-status-dot { background: var(--offline); }
+  .tile-name {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 1.05rem; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase; color: var(--green-dark);
+    flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tile-public-badge {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.65rem; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase; padding: 0.1rem 0.5rem;
+    background: var(--green-light); border: 1px solid var(--green-border); color: var(--green-dark); border-radius: 20px; white-space: nowrap;
+  }
+  .tile-fw { font-family: monospace; font-size: 0.62rem; color: var(--muted); white-space: nowrap; }
+
+  /* SPARKLINES */
+  .sparklines { display: grid; grid-template-columns: 1fr 1fr 1fr; border-bottom: 1px solid var(--border); }
+  .spark-cell {
+    padding: 0.6rem 0.85rem 0.5rem; border-right: 1px solid var(--border);
+    cursor: pointer; transition: background 0.15s; position: relative;
+  }
+  .spark-cell:last-child { border-right: none; }
+  .spark-cell:hover { background: var(--green-pale); }
+  .spark-cell:hover::after {
+    content: '⤢';
+    position: absolute; top: 0.4rem; right: 0.4rem;
+    font-size: 0.65rem; color: var(--green-mid); opacity: 0.7;
+  }
+  .spark-label {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.65rem; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.1rem;
+  }
+  .spark-value { font-family: monospace; font-size: 1rem; font-weight: 700; color: var(--green-dark); line-height: 1.1; }
+  .spark-value.bat-warn { color: #92400e; }
+  .spark-value.bat-low  { color: var(--danger); }
+  canvas.sparkline { width: 100%; height: 28px; display: block; margin-top: 0.3rem; }
+
+  /* PACKETS */
+  .packet-section { padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); }
+  .pkt-section-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.68rem; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.45rem;
+  }
+  .pkt-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.28rem; }
+  .pkt-row:last-child { margin-bottom: 0; }
+  .pkt-dir-label {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.78rem; font-weight: 600;
+    letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-sec); width: 60px; flex-shrink: 0;
+  }
+  .pkt-values { display: flex; flex: 1; }
+  .pkt-cell { flex: 1; text-align: right; }
+  .pkt-tag {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.6rem; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+  }
+  .pkt-num { font-family: monospace; font-size: 0.82rem; font-weight: 700; color: var(--text); }
+  .pkt-num.direct { color: var(--green-dark); }
+  .pkt-num.flood  { color: var(--green-mid); }
+
+  /* TILE FOOTER */
+  .tile-footer { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: var(--surface2); }
+  .last-polled { font-family: monospace; font-size: 0.65rem; color: var(--muted); }
+  .route-path { font-family: monospace; font-size: 0.62rem; color: var(--green-mid); margin-top: 0.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .route-path.muted { color: var(--muted); }
+  .poll-btn {
+    background: transparent; border: 1px solid var(--green-border); color: var(--green-mid);
+    padding: 0.25rem 0.75rem; font-family: 'Barlow Condensed', sans-serif; font-size: 0.75rem;
+    font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; border-radius: 4px;
+    cursor: pointer; transition: all 0.15s; flex-shrink: 0;
+  }
+  .poll-btn:hover    { background: var(--green-pale); border-color: var(--green-mid); color: var(--green-dark); }
+  .poll-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .poll-btn.polling  { border-color: #92400e; color: #92400e; background: #fffbeb; }
+
+  /* EMPTY STATE */
+  .empty-state { grid-column: 1/-1; text-align: center; padding: 4rem 2rem; color: var(--muted); }
+  .empty-state h2 {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 1.3rem; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-sec); margin-bottom: 0.4rem;
+  }
+  .empty-state a { color: var(--green-mid); text-decoration: none; }
+
+  /* ── CHART MODAL ─────────────────────────────────────────── */
+  .modal-backdrop {
+    display: none;
+    position: fixed; inset: 0; z-index: 500;
+    background: rgba(10, 20, 8, 0.65);
+    backdrop-filter: blur(3px);
+    align-items: center; justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: min(900px, 95vw);
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+
+  .modal-header {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    background: var(--green-dark);
+    flex-shrink: 0;
+  }
+
+  .modal-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 1.2rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em; color: #fff; flex: 1;
+  }
+
+  .modal-subtitle {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.8rem; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--green-light); opacity: 0.7;
+  }
+
+  .modal-range {
+    display: flex; gap: 0.35rem;
+  }
+
+  .range-btn {
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.65); padding: 0.2rem 0.6rem;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.75rem; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase; border-radius: 4px; cursor: pointer; transition: all 0.15s;
+  }
+  .range-btn:hover  { background: rgba(255,255,255,0.18); color: #fff; }
+  .range-btn.active { background: var(--green-mid); border-color: var(--green-mid); color: #fff; }
+
+  .modal-close {
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.75); width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; cursor: pointer; font-size: 1rem; transition: all 0.15s; flex-shrink: 0;
+  }
+  .modal-close:hover { background: rgba(255,255,255,0.2); color: #fff; }
+
+  .modal-body {
+    padding: 1.25rem;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .chart-wrap {
+    position: relative;
+    height: 220px;
+    margin-bottom: 1.25rem;
+  }
+
+  .chart-wrap canvas {
+    position: absolute; inset: 0; width: 100% !important; height: 100% !important;
+  }
+
+  .chart-section-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.8rem; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--green-mid);
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .chart-loading {
+    display: flex; align-items: center; justify-content: center;
+    height: 220px; color: var(--muted);
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+
+  .chart-stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .chart-stat {
+    background: var(--green-pale); border: 1px solid var(--green-border);
+    border-radius: 4px; padding: 0.5rem 0.75rem; text-align: center;
+  }
+
+  .chart-stat-label {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.62rem; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.15rem;
+  }
+
+  .chart-stat-value { font-family: monospace; font-size: 0.9rem; font-weight: 700; color: var(--green-dark); }
+
+  /* TOAST */
+  .toast {
+    position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--green-dark); color: #fff;
+    padding: 0.65rem 1rem; font-size: 0.85rem; max-width: 320px; z-index: 999;
+    opacity: 0; transform: translateY(8px); transition: all 0.25s; border-radius: 4px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2); border-left: 3px solid var(--green-light);
+  }
+  .toast.show  { opacity: 1; transform: translateY(0); }
+  .toast.error { background: var(--danger); border-left-color: #fca5a5; }
+</style>
 </head>
 <body>
 
-  <header>
-    <div class="header-title">
-      <h1>MeshCore Repeater Monitor</h1>
-      <div class="subtitle">LoRa Mesh Network Dashboard</div>
-      <div class="header-meta">
-        <div class="node-status">
-          <span class="status-dot unknown" id="nodeDot"></span>
-          <span id="nodeText">Node: --</span>
-          <button id="pollToggleBtn" onclick="togglePolling()" style="display:none;margin-left:0.5rem;background:none;border:1px solid #334155;color:#94a3b8;font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:4px;cursor:pointer;font-family:inherit" title="Toggle duty-cycle polling"></button>
-        </div>
-        <span class="header-meta-sep">&mdash;</span>
-        <div class="conn-status">
-          <span class="status-dot unknown" id="connDot"></span>
-          <span id="connText">Connecting&hellip;</span>
-          <span id="lastUpdate" class="conn-time">--</span>
-        </div>
-      </div>
+<nav>
+  <a href="/" class="nav-brand">📡 MeshCore</a>
+  <a href="/" class="active">Dashboard</a>
+    <a href="/poll-queue">Poll Queue</a>
+  <a href="/settings">Settings</a>
+  <a href="/public" target="_blank">Public</a>
+  <div class="nav-right">
+    <div class="conn-pill">
+      <div class="conn-dot" id="connDot"></div>
+      <span id="connStatus">—</span>
     </div>
-    <nav class="nav-group">
-      <a href="/map" class="nav-btn" title="Network Map">Map</a>
-      <a href="/messages" class="nav-btn" id="msgsNavLink" title="Messages">
-        Messages<span id="msgsBadge" class="msgs-unread-dot" style="display:none"></span>
-      </a>
-      <a href="/packets" class="nav-btn" title="Recent Packets">Packets</a>
-      <a href="/logs" class="nav-btn" title="Activity Logs">Logs</a>
-      <button id="ntfyToggleBtn" class="nav-btn nav-ntfy-btn" onclick="toggleNtfy()" title="Toggle push notifications" style="display:none">&#9993;</button>
-      <a href="/settings" class="nav-btn nav-settings" title="Settings">&#9881;</a>
-    </nav>
-  </header>
+    <span class="nav-user" id="navUser"></span>
+    <button class="btn-nav" onclick="logout()">Sign out</button>
+  </div>
+</nav>
 
-  <div class="grid" id="repeaterGrid">
-    <div class="no-data">
-      <h2>Connecting...</h2>
-      <p>Waiting for the server to respond.</p>
+<main>
+  <div class="page-header">
+    <div class="page-title">Node Dashboard</div>
+    <div class="page-header-right">
+      <div class="badge" id="nodeCount">0 nodes</div>
+      <div class="badge" id="lastUpdate">Loading…</div>
     </div>
   </div>
+  <div class="grid" id="grid"></div>
+</main>
 
-  <!-- History Modal -->
-  <div class="modal-overlay" id="historyModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="historyTitle">History</h2>
-        <button class="modal-close" onclick="closeHistory()">&times;</button>
+<!-- ── CHART MODAL ── -->
+<div class="modal-backdrop" id="chartModal" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modalTitle">—</div>
+        <div class="modal-subtitle" id="modalMetric">—</div>
       </div>
-      <canvas id="historyChart" height="250"></canvas>
+      <div class="modal-range">
+        <button class="range-btn" onclick="setRange(24)">24h</button>
+        <button class="range-btn active" onclick="setRange(168)">7d</button>
+        <button class="range-btn" onclick="setRange(720)">30d</button>
+      </div>
+      <div class="modal-close" onclick="closeModal()">✕</div>
     </div>
-  </div>
-
-  <!-- Logs Modal -->
-  <div class="modal-overlay" id="logsModal">
-    <div class="modal-content logs-panel">
-      <div class="modal-header">
-        <h2>Activity Logs</h2>
-        <button class="modal-close" onclick="closeLogs()">&times;</button>
-      </div>
-      <div class="logs-controls">
-        <div class="logs-filter-group">
-          <label for="logHours">Show last</label>
-          <select id="logHours" onchange="refreshLogs()">
-            <option value="1">1 hour</option>
-            <option value="6">6 hours</option>
-            <option value="12">12 hours</option>
-            <option value="24" selected>24 hours</option>
-            <option value="48">48 hours</option>
-            <option value="168">7 days</option>
-          </select>
-        </div>
-        <div class="logs-filter-group">
-          <label for="logLevel">Level</label>
-          <select id="logLevel" onchange="refreshLogs()">
-            <option value="">All</option>
-            <option value="ERROR">Error</option>
-            <option value="WARNING">Warning</option>
-            <option value="INFO">Info</option>
-          </select>
-        </div>
-        <button class="btn btn-secondary logs-refresh-btn" onclick="refreshLogs()">Refresh</button>
-      </div>
-      <div class="logs-retention-setting">
-        <label for="logRetention">Auto-delete logs older than</label>
-        <input type="number" id="logRetention" min="1" max="720" value="24">
-        <span>hours</span>
-        <button class="btn btn-secondary" onclick="saveLogRetention()">Save</button>
-      </div>
-      <div class="logs-table-wrap" id="logsTableWrap">
-        <table class="logs-table">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Level</th>
-              <th>Source</th>
-              <th>Message</th>
-            </tr>
-          </thead>
-          <tbody id="logsBody">
-            <tr><td colspan="4" class="logs-empty">Loading...</td></tr>
-          </tbody>
-        </table>
+    <div class="modal-body">
+      <div class="chart-stats-row" id="chartStats"></div>
+      <div class="chart-section-title" id="chartSectionTitle">—</div>
+      <div class="chart-wrap">
+        <div class="chart-loading" id="chartLoading">Loading data…</div>
+        <canvas id="chartCanvas" style="display:none"></canvas>
       </div>
     </div>
   </div>
+</div>
 
-  <script src="/static/dashboard.js"></script>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────
+let repeaters = [];
+let histories = {};            // pubkey → 7-day history (for sparklines)
+let modalHistory = {};         // pubkey+hours → full history (for modal)
+let pollingPubkeys = new Set();
+
+// Modal state
+let modalPubkey  = null;
+let modalMetric  = null;       // 'battery_v' | 'noise_floor' | 'temperature'
+let modalHours   = 168;
+let modalChart   = null;       // Chart.js instance
+
+const METRIC_CFG = {
+  battery_v:   { label: 'Battery Voltage', unit: 'V',   color: '#2d5016', field: 'battery_v',   decimals: 2 },
+  noise_floor: { label: 'Noise Floor',     unit: 'dBm', color: '#b45309', field: 'noise_floor',  decimals: 0 },
+  temperature: { label: 'Temperature',     unit: '°C',  color: '#4a7c24', field: 'temperature',  decimals: 1 },
+};
+
+// ── Init ──────────────────────────────────────────────────────
+async function init() {
+  const me = await fetch('/api/me').then(r => r.json()).catch(() => null);
+  if (me && me.username) {
+    document.getElementById('navUser').textContent = me.username;
+    if (me.is_admin) {
+      
+    }
+  }
+  await loadData();
+  startSSE();
+  checkConnection();
+  setInterval(checkConnection, 15000);
+
+  // ESC closes modal
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+}
+
+function startSSE() {
+  const es = new EventSource('/api/stream');
+  es.addEventListener('update', e => {
+    const parsed = JSON.parse(e.data);
+    // Ignore empty updates if we already have nodes — avoids blanking on transient states
+    if (parsed.length === 0 && repeaters.length > 0) return;
+    repeaters = parsed;
+    renderGrid();
+    document.getElementById('lastUpdate').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    document.getElementById('nodeCount').textContent = repeaters.length + (repeaters.length === 1 ? ' node' : ' nodes');
+  });
+  es.onerror = () => { es.close(); setTimeout(startSSE, 5000); };
+}
+
+async function loadData() {
+  try {
+    repeaters = await fetch('/api/repeaters').then(r => r.json());
+    document.getElementById('nodeCount').textContent = repeaters.length + (repeaters.length === 1 ? ' node' : ' nodes');
+    for (const rep of repeaters) {
+      await loadHistory(rep.pubkey, 168);
+    }
+    renderGrid();
+  } catch(e) { console.error(e); }
+}
+
+async function loadHistory(pubkey, hours) {
+  const key = pubkey + '_' + hours;
+  try {
+    const data = await fetch('/api/history/' + pubkey + '?hours=' + hours).then(r => r.json());
+    if (hours === 168) histories[pubkey] = data;
+    modalHistory[key] = data;
+    return data;
+  } catch(e) {
+    if (hours === 168) histories[pubkey] = [];
+    modalHistory[key] = [];
+    return [];
+  }
+}
+
+async function checkConnection() {
+  try {
+    const conn = await fetch('/api/connection').then(r => r.json());
+    const dot = document.getElementById('connDot');
+    dot.className = 'conn-dot ' + (conn.connected ? 'online' : 'offline');
+    document.getElementById('connStatus').textContent = conn.connected ? conn.host + ':' + conn.port : 'Offline';
+  } catch(e) {}
+}
+
+// ── Grid Render ───────────────────────────────────────────────
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  if (!repeaters.length) {
+    grid.innerHTML = '<div class="empty-state"><h2>No Nodes Configured</h2><p>Add repeaters in <a href="/settings">Settings</a> to get started.</p></div>';
+    return;
+  }
+  // Remove any empty-state placeholder that may be present
+  grid.querySelectorAll('.empty-state').forEach(el => el.remove());
+
+  const existing = {};
+  grid.querySelectorAll('.tile[data-pubkey]').forEach(t => { existing[t.dataset.pubkey] = t; });
+  const seen = new Set();
+  repeaters.forEach(rep => {
+    seen.add(rep.pubkey);
+    const hist = histories[rep.pubkey] || [];
+    if (existing[rep.pubkey]) {
+      updateTile(existing[rep.pubkey], rep, hist);
+    } else {
+      grid.appendChild(buildTile(rep, hist));
+    }
+  });
+  Object.entries(existing).forEach(([pk, t]) => { if (!seen.has(pk)) t.remove(); });
+}
+
+function buildTile(rep, hist) {
+  const tile = document.createElement('div');
+  tile.dataset.pubkey = rep.pubkey;
+  tile.className = 'tile ' + (rep.online ? 'online' : 'offline');
+  tile.innerHTML = tileHTML(rep);
+  requestAnimationFrame(() => drawAllSparklines(tile, rep, hist));
+  return tile;
+}
+
+function updateTile(tile, rep, hist) {
+  tile.className = 'tile ' + (rep.online ? 'online' : 'offline');
+  const qs = s => tile.querySelector(s);
+  const set = (sel, val) => { const el = qs(sel); if (el) el.textContent = val; };
+  set('.tile-name', rep.name || rep.pubkey_short || rep.pubkey.slice(0,8));
+  set('.tile-fw', rep.fw_version ? 'fw ' + rep.fw_version : '');
+  const batEl = qs('.sv-bat');
+  if (batEl) { const v = rep.battery_voltage; batEl.textContent = v ? v.toFixed(2) + ' V' : '—'; batEl.className = 'spark-value sv-bat ' + batClass(v); }
+  set('.sv-nf',   rep.noise_floor ? rep.noise_floor + ' dBm' : '—');
+  set('.sv-temp', rep.temperature ? rep.temperature.toFixed(1) + '°C' : '—');
+  set('.pn-rt', fmtNum(rep.packets_recv));
+  set('.pn-rd', fmtNum(rep.packets_recv_direct));
+  set('.pn-rf', fmtNum(rep.packets_recv_flood));
+  set('.pn-st', fmtNum(rep.packets_sent));
+  set('.pn-sd', fmtNum(rep.packets_sent_direct));
+  set('.pn-sf', fmtNum(rep.packets_sent_flood));
+  set('.last-polled', 'Polled ' + fmtAge(rep.last_seen_epoch));
+  const badge = qs('.tile-public-badge');
+  if (rep.show_public && !badge) {
+    const b = document.createElement('span'); b.className = 'tile-public-badge'; b.textContent = 'Public';
+    qs('.tile-header').insertBefore(b, qs('.tile-fw'));
+  } else if (!rep.show_public && badge) { badge.remove(); }
+  drawAllSparklines(tile, rep, hist);
+}
+
+function tileHTML(rep) {
+  const v  = rep.battery_voltage;
+  const pk = rep.pubkey.slice(0, 12);
+  const name = esc(rep.name || rep.pubkey_short || rep.pubkey.slice(0,8));
+  return `<div class="tile-top-bar"></div>
+    <div class="tile-header">
+      <div class="tile-status-dot"></div>
+      <div class="tile-name">${name}</div>
+      ${rep.show_public ? '<span class="tile-public-badge">Public</span>' : ''}
+      <span class="tile-fw">${rep.fw_version ? 'fw ' + esc(rep.fw_version) : ''}</span>
+    </div>
+    <div class="sparklines">
+      <div class="spark-cell" onclick="openModal('${rep.pubkey}','battery_v')" title="Click to expand">
+        <div class="spark-label">Battery Voltage</div>
+        <div class="spark-value sv-bat ${batClass(v)}">${v ? v.toFixed(2) + ' V' : '—'}</div>
+        <canvas class="sparkline" id="sp-bat-${pk}"></canvas>
+      </div>
+      <div class="spark-cell" onclick="openModal('${rep.pubkey}','noise_floor')" title="Click to expand">
+        <div class="spark-label">Noise Floor</div>
+        <div class="spark-value sv-nf">${rep.noise_floor ? rep.noise_floor + ' dBm' : '—'}</div>
+        <canvas class="sparkline" id="sp-nf-${pk}"></canvas>
+      </div>
+      <div class="spark-cell" onclick="openModal('${rep.pubkey}','temperature')" title="Click to expand">
+        <div class="spark-label">Temperature</div>
+        <div class="spark-value sv-temp">${rep.temperature ? rep.temperature.toFixed(1) + '°C' : '—'}</div>
+        <canvas class="sparkline" id="sp-temp-${pk}"></canvas>
+      </div>
+    </div>
+    <div class="packet-section">
+      <div class="pkt-section-title">Packet Counters</div>
+      <div class="pkt-row">
+        <div class="pkt-dir-label">Recv</div>
+        <div class="pkt-values">
+          <div class="pkt-cell"><div class="pkt-tag">Total</div><div class="pkt-num pn-rt">${fmtNum(rep.packets_recv)}</div></div>
+          <div class="pkt-cell"><div class="pkt-tag">Direct</div><div class="pkt-num direct pn-rd">${fmtNum(rep.packets_recv_direct)}</div></div>
+          <div class="pkt-cell"><div class="pkt-tag">Flood</div><div class="pkt-num flood pn-rf">${fmtNum(rep.packets_recv_flood)}</div></div>
+        </div>
+      </div>
+      <div class="pkt-row">
+        <div class="pkt-dir-label">Sent</div>
+        <div class="pkt-values">
+          <div class="pkt-cell"><div class="pkt-tag">Total</div><div class="pkt-num pn-st">${fmtNum(rep.packets_sent)}</div></div>
+          <div class="pkt-cell"><div class="pkt-tag">Direct</div><div class="pkt-num direct pn-sd">${fmtNum(rep.packets_sent_direct)}</div></div>
+          <div class="pkt-cell"><div class="pkt-tag">Flood</div><div class="pkt-num flood pn-sf">${fmtNum(rep.packets_sent_flood)}</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="tile-footer">
+      <div style="flex:1;min-width:0;">
+        <div class="last-polled">Polled ${fmtAge(rep.last_seen_epoch)}</div>
+        ${rep.route_path ? `<div class="route-path">⇥ ${esc(rep.route_path)}</div>` : (rep.hops === 0 ? '<div class="route-path">⚡ direct</div>' : '<div class="route-path muted">flood</div>')}
+      </div>
+      <button class="poll-btn" onclick="manualPoll('${rep.pubkey}', this)">Poll Now</button>
+    </div>`;
+}
+
+// ── Sparklines ────────────────────────────────────────────────
+function drawAllSparklines(tile, rep, hist) {
+  const pk = rep.pubkey.slice(0, 12);
+  const s  = subsample(hist, 80);
+  drawSpark(tile.querySelector('#sp-bat-' + pk),  s.map(h => h.battery_v),   '#2d5016');
+  drawSpark(tile.querySelector('#sp-nf-'  + pk),  s.map(h => h.noise_floor),  '#b45309');
+  drawSpark(tile.querySelector('#sp-temp-'+ pk),  s.map(h => h.temperature),  '#4a7c24');
+}
+
+function subsample(arr, max) {
+  if (arr.length <= max) return arr;
+  const step = Math.ceil(arr.length / max);
+  return arr.filter((_, i) => i % step === 0);
+}
+
+function drawSpark(canvas, raw, color) {
+  if (!canvas) return;
+  const vals = raw.filter(v => v != null && v !== 0);
+  if (vals.length < 2) { const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); return; }
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth || 110;
+  const h = 28;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr); ctx.clearRect(0,0,w,h);
+  const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx - mn || 1, p = 2;
+  const pts = vals.map((v, i) => ({ x: p + (i / (vals.length-1)) * (w - p*2), y: h - p - ((v-mn)/rng) * (h - p*2) }));
+  const g = ctx.createLinearGradient(0,0,0,h);
+  g.addColorStop(0, color + '28'); g.addColorStop(1, color + '00');
+  ctx.beginPath(); ctx.moveTo(pts[0].x, h); pts.forEach(pt => ctx.lineTo(pt.x, pt.y)); ctx.lineTo(pts[pts.length-1].x, h); ctx.closePath();
+  ctx.fillStyle = g; ctx.fill();
+  ctx.beginPath(); pts.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y));
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.stroke();
+  const last = pts[pts.length-1]; ctx.beginPath(); ctx.arc(last.x, last.y, 2.5, 0, Math.PI*2); ctx.fillStyle = color; ctx.fill();
+}
+
+// ── Chart Modal ───────────────────────────────────────────────
+async function openModal(pubkey, metric) {
+  modalPubkey = pubkey;
+  modalMetric = metric;
+
+  const rep = repeaters.find(r => r.pubkey === pubkey);
+  const cfg = METRIC_CFG[metric];
+
+  // Set header text
+  document.getElementById('modalTitle').textContent = (rep ? rep.name : pubkey.slice(0,12)) + ' — ' + cfg.label;
+  document.getElementById('modalMetric').textContent = '';
+  document.getElementById('chartSectionTitle').textContent = cfg.label + ' over time';
+
+  // Mark active range button
+  document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.range-btn').forEach(b => {
+    if (parseInt(b.textContent) === modalHours ||
+        (b.textContent === '7d' && modalHours === 168) ||
+        (b.textContent === '30d' && modalHours === 720) ||
+        (b.textContent === '24h' && modalHours === 24)) {
+      b.classList.add('active');
+    }
+  });
+
+  // Show modal
+  document.getElementById('chartModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  await renderModal();
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('chartModal')) return;
+  document.getElementById('chartModal').classList.remove('open');
+  document.body.style.overflow = '';
+  if (modalChart) { modalChart.destroy(); modalChart = null; }
+}
+
+async function setRange(hours) {
+  modalHours = hours;
+  // Update active button
+  const labels = { 24: '24h', 168: '7d', 720: '30d' };
+  document.querySelectorAll('.range-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent === labels[hours]);
+  });
+  await renderModal();
+}
+
+async function renderModal() {
+  if (!modalPubkey || !modalMetric) return;
+  const cfg = METRIC_CFG[modalMetric];
+
+  // Show loading
+  document.getElementById('chartLoading').style.display = 'flex';
+  document.getElementById('chartCanvas').style.display = 'none';
+  document.getElementById('chartStats').innerHTML = '';
+
+  // Fetch data (use cache if available)
+  const cacheKey = modalPubkey + '_' + modalHours;
+  let hist = modalHistory[cacheKey];
+  if (!hist) {
+    hist = await loadHistory(modalPubkey, modalHours);
+  }
+
+  // Filter to non-zero values for the chosen metric
+  const field = cfg.field;
+  const filtered = hist.filter(h => h[field] != null && h[field] !== 0);
+
+  // Build stats
+  if (filtered.length > 0) {
+    const vals = filtered.map(h => h[field]);
+    const mn   = Math.min(...vals);
+    const mx   = Math.max(...vals);
+    const avg  = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const last = vals[vals.length - 1];
+    const fmt  = v => v.toFixed(cfg.decimals) + ' ' + cfg.unit;
+    document.getElementById('chartStats').innerHTML = `
+      <div class="chart-stat"><div class="chart-stat-label">Current</div><div class="chart-stat-value">${fmt(last)}</div></div>
+      <div class="chart-stat"><div class="chart-stat-label">Avg</div><div class="chart-stat-value">${fmt(avg)}</div></div>
+      <div class="chart-stat"><div class="chart-stat-label">Min</div><div class="chart-stat-value">${fmt(mn)}</div></div>
+      <div class="chart-stat"><div class="chart-stat-label">Max</div><div class="chart-stat-value">${fmt(mx)}</div></div>`;
+  }
+
+  if (filtered.length < 2) {
+    document.getElementById('chartLoading').textContent = 'Not enough data for this period.';
+    document.getElementById('chartLoading').style.display = 'flex';
+    return;
+  }
+
+  document.getElementById('chartLoading').style.display = 'none';
+  const canvas = document.getElementById('chartCanvas');
+  canvas.style.display = 'block';
+
+  if (modalChart) { modalChart.destroy(); modalChart = null; }
+
+  // Build labels — use actual poll timestamps
+  const labels = filtered.map(h => {
+    const d = new Date(h.ts * 1000);
+    if (modalHours <= 24) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (modalHours <= 168) {
+      return d.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    } else {
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+  });
+
+  const values = filtered.map(h => h[field]);
+  const color  = cfg.color;
+
+  const ctx = canvas.getContext('2d');
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.offsetHeight || 220);
+  grad.addColorStop(0, color + '35');
+  grad.addColorStop(1, color + '00');
+
+  // Build min/max range based on data
+  const dataMin = Math.min(...values);
+  const dataMax = Math.max(...values);
+  const padding = (dataMax - dataMin) * 0.15 || 1;
+
+  modalChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: cfg.label + ' (' + cfg.unit + ')',
+        data: values,
+        borderColor: color,
+        backgroundColor: grad,
+        borderWidth: 1.5,
+        pointRadius: filtered.length > 100 ? 0 : 3,
+        pointHoverRadius: 5,
+        pointBackgroundColor: color,
+        tension: 0.3,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a2a10',
+          titleColor: '#c8e6c9',
+          bodyColor: '#e8f5e2',
+          borderColor: '#4a7c24',
+          borderWidth: 1,
+          padding: 10,
+          callbacks: {
+            title: items => items[0].label,
+            label: item => ' ' + item.formattedValue + ' ' + cfg.unit,
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#7a8a6a',
+            font: { family: "'Barlow Condensed', sans-serif", size: 11 },
+            maxTicksLimit: 10,
+            maxRotation: 30,
+          },
+          grid: { color: '#dde8d6' },
+        },
+        y: {
+          min: dataMin - padding,
+          max: dataMax + padding,
+          ticks: {
+            color: '#7a8a6a',
+            font: { family: 'monospace', size: 11 },
+            callback: v => v.toFixed(cfg.decimals) + ' ' + cfg.unit,
+          },
+          grid: { color: '#dde8d6' },
+        }
+      }
+    }
+  });
+}
+
+// ── Chart.js loader ───────────────────────────────────────────
+(function loadChartJS() {
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+  s.onload = () => console.log('Chart.js ready');
+  document.head.appendChild(s);
+})();
+
+// ── Manual Poll ───────────────────────────────────────────────
+async function manualPoll(pubkey, btn) {
+  if (pollingPubkeys.has(pubkey)) return;
+  pollingPubkeys.add(pubkey);
+  btn.disabled = true; btn.classList.add('polling'); btn.textContent = 'Polling…';
+  try {
+    const res  = await fetch('/api/ping/' + pubkey, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('Poll complete (' + data.latency_ms + ' ms)');
+      // Refresh sparkline history and modal if open
+      await loadHistory(pubkey, 168);
+      // Invalidate modal caches for this node so they're refreshed on next open
+      Object.keys(modalHistory).forEach(k => { if (k.startsWith(pubkey)) delete modalHistory[k]; });
+      renderGrid();
+      if (modalPubkey === pubkey) await renderModal();
+    } else {
+      showToast('Poll failed: ' + (data.error || 'unknown'), true);
+    }
+  } catch(e) { showToast('Error: ' + e.message, true); }
+  finally { pollingPubkeys.delete(pubkey); btn.disabled = false; btn.classList.remove('polling'); btn.textContent = 'Poll Now'; }
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function batClass(v) { if (!v) return ''; if (v < 3.5) return 'bat-low'; if (v < 3.7) return 'bat-warn'; return ''; }
+function fmtNum(n)   { if (n == null) return '—'; return Number(n).toLocaleString(); }
+function fmtAge(ep)  {
+  if (!ep) return 'never';
+  const d = Math.floor(Date.now() / 1000 - ep);
+  if (d < 0)     return 'just now';
+  if (d < 60)    return d + 's ago';
+  if (d < 3600)  return Math.floor(d / 60) + 'm ago';
+  if (d < 86400) return Math.floor(d / 3600) + 'h ago';
+  return Math.floor(d / 86400) + 'd ago';
+}
+function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function logout() { fetch('/logout', { method: 'POST' }).then(() => location.href = '/login'); }
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show' + (isError ? ' error' : '');
+  clearTimeout(t._timer); t._timer = setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+init();
+</script>
 </body>
 </html>
