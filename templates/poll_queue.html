@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poll Queue — MeshCore</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green-dark:   #2d5016;
+    --green-mid:    #4a7c24;
+    --green-light:  #c8e6c9;
+    --green-pale:   #f0f7ee;
+    --green-border: #b8d4b0;
+    --bg:           #f5f5f0;
+    --surface:      #ffffff;
+    --surface2:     #f8faf6;
+    --border:       #dde8d6;
+    --border-mid:   #c0d4b4;
+    --text:         #1a1a1a;
+    --text-sec:     #4a5a3a;
+    --muted:        #7a8a6a;
+    --online:       #2d7a22;
+    --offline:      #b91c1c;
+    --danger:       #b91c1c;
+    --warn:         #92400e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Lato', sans-serif; font-size: 14px; min-height: 100vh; }
+
+  /* NAV */
+  .mc-nav {
+    background: var(--green-dark); display: flex; align-items: center;
+    padding: 0 1.5rem; height: 52px; gap: 1.4rem;
+    position: sticky; top: 0; z-index: 200;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  .mc-nav-brand { font-family: 'Barlow Condensed', sans-serif; font-size: 1.2rem; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 0.08em; margin-right: auto; text-decoration: none; }
+  .mc-nav a { color: rgba(255,255,255,0.65); text-decoration: none; font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.2rem 0; border-bottom: 2px solid transparent; transition: color 0.15s; white-space: nowrap; }
+  .mc-nav a:hover { color: #fff; }
+  .mc-nav a.active { color: #fff; border-bottom-color: var(--green-light); }
+  .mc-nav-right { display: flex; align-items: center; gap: 0.5rem; margin-left: 0.5rem; }
+  .mc-conn-pill { display: flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.65rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; font-family: monospace; font-size: 0.7rem; color: rgba(255,255,255,0.75); }
+  .mc-conn-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.3); flex-shrink: 0; transition: background 0.3s; }
+  .mc-conn-dot.online  { background: #4ade80; }
+  .mc-conn-dot.offline { background: #f87171; }
+  .mc-user { font-family: 'Barlow Condensed', sans-serif; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green-light); }
+  .mc-signout { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: rgba(255,255,255,0.75); padding: 0.22rem 0.7rem; font-family: 'Barlow Condensed', sans-serif; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; border-radius: 4px; transition: all 0.15s; }
+  .mc-signout:hover { background: rgba(255,255,255,0.18); color: #fff; }
+
+  /* PAGE */
+  .page-wrap { max-width: 900px; margin: 0 auto; padding: 1.25rem 1.5rem; }
+
+  .page-header {
+    display: flex; align-items: center; gap: 1rem;
+    margin-bottom: 1.25rem; padding-bottom: 1rem;
+    border-bottom: 2px solid var(--green-border);
+  }
+  .page-title { font-family: 'Barlow Condensed', sans-serif; font-size: 1.4rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--green-dark); }
+
+  /* STATUS STRIP */
+  .status-strip {
+    display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.65rem 1rem; margin-bottom: 1rem;
+    box-shadow: 0 1px 3px rgba(45,80,22,0.05);
+  }
+  .status-item {
+    display: flex; align-items: center; gap: 0.35rem;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.8rem; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-sec);
+  }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .status-dot.connected { background: var(--online); }
+  .status-dot.disconnected { background: var(--offline); }
+  .status-sep { color: var(--border-mid); font-weight: 400; }
+  .countdown {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.8rem; font-weight: 600;
+    letter-spacing: 0.04em; color: var(--muted); margin-left: auto;
+  }
+  .countdown.soon { color: var(--green-mid); }
+
+  /* QUEUE GRID */
+  .queue-grid { display: flex; flex-direction: column; gap: 0.5rem; }
+
+  .queue-row {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    overflow: hidden; box-shadow: 0 1px 3px rgba(45,80,22,0.05);
+    display: grid;
+    grid-template-columns: 4px 1fr auto;
+    transition: box-shadow 0.2s;
+  }
+  .queue-row:hover { box-shadow: 0 3px 10px rgba(45,80,22,0.1); }
+
+  /* Left accent bar */
+  .q-accent { background: var(--border); }
+  .queue-row.status-waiting  .q-accent { background: var(--border-mid); }
+  .queue-row.status-polling  .q-accent { background: var(--green-mid); }
+  .queue-row.status-complete .q-accent { background: var(--online); }
+  .queue-row.status-failed   .q-accent { background: var(--danger); }
+
+  .q-body {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.7rem 1rem; min-width: 0;
+  }
+
+  .q-name {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 1rem; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase; color: var(--green-dark);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-width: 100px;
+  }
+
+  .q-pubkey {
+    font-family: monospace; font-size: 0.7rem; color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .q-status-badge {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.7rem; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 0.15rem 0.55rem; border-radius: 20px; white-space: nowrap; flex-shrink: 0;
+  }
+  .status-waiting  .q-status-badge { background: var(--surface2);  border: 1px solid var(--border);    color: var(--muted); }
+  .status-polling  .q-status-badge { background: #f0f7ee;          border: 1px solid var(--green-border); color: var(--green-dark); }
+  .status-complete .q-status-badge { background: #ecfdf5;          border: 1px solid #a7f3d0;           color: #065f46; }
+  .status-failed   .q-status-badge { background: #fef2f2;          border: 1px solid #fca5a5;           color: var(--danger); }
+
+  .q-timing {
+    font-family: monospace; font-size: 0.72rem; color: var(--muted);
+    white-space: nowrap; margin-left: auto; flex-shrink: 0;
+  }
+
+  .q-error {
+    font-size: 0.75rem; color: var(--danger);
+    margin-top: 0.2rem; font-style: italic;
+  }
+
+  .q-right {
+    display: flex; align-items: center; padding-right: 1rem;
+  }
+
+  /* Spinning loader for polling state */
+  .spin {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--green-border);
+    border-top-color: var(--green-mid);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* HISTORY SECTION */
+  .section-label {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.72rem; font-weight: 700;
+    letter-spacing: 0.15em; text-transform: uppercase; color: var(--green-mid);
+    margin: 1.4rem 0 0.5rem;
+    padding-bottom: 0.4rem; border-bottom: 2px solid var(--green-border);
+  }
+
+  .history-list { display: flex; flex-direction: column; gap: 0.3rem; }
+
+  .history-row {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.45rem 0.85rem;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+    font-size: 0.8rem;
+  }
+  .history-row:hover { background: var(--green-pale); }
+
+  .h-time { font-family: monospace; font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+  .h-name { font-family: 'Barlow Condensed', sans-serif; font-size: 0.88rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--green-dark); min-width: 100px; }
+  .h-result {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 0.7rem; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase; padding: 0.1rem 0.45rem;
+    border-radius: 20px; white-space: nowrap;
+  }
+  .h-result.ok  { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+  .h-result.err { background: #fef2f2; border: 1px solid #fca5a5; color: var(--danger); }
+  .h-duration { font-family: monospace; font-size: 0.7rem; color: var(--muted); margin-left: auto; }
+  .h-error { font-size: 0.72rem; color: var(--danger); font-style: italic; }
+
+  /* EMPTY */
+  .empty { text-align: center; padding: 2rem; color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* POLL NOW BUTTON */
+  .btn-poll {
+    background: transparent; border: 1px solid var(--green-border); color: var(--green-mid);
+    padding: 0.22rem 0.65rem; font-family: 'Barlow Condensed', sans-serif; font-size: 0.72rem;
+    font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+    border-radius: 4px; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-poll:hover    { background: var(--green-pale); border-color: var(--green-mid); }
+  .btn-poll:disabled { opacity: 0.4; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<nav class="mc-nav">
+  <a href="/" class="mc-nav-brand">📡 MeshCore</a>
+  <a href="/">Dashboard</a>
+  <a href="/poll-queue" class="active">Poll Queue</a>
+  <a href="/settings">Settings</a>
+  <a href="/public" target="_blank">Public</a>
+  <div class="mc-nav-right">
+    <div class="mc-conn-pill">
+      <div class="mc-conn-dot" id="mcConnDot"></div>
+      <span id="mcConnHost">—</span>
+    </div>
+    <span class="mc-user" id="mcUser"></span>
+    <button class="mc-signout" onclick="mcLogout()">Sign out</button>
+  </div>
+</nav>
+
+<div class="page-wrap">
+
+  <div class="page-header">
+    <div class="page-title">Poll Queue</div>
+  </div>
+
+  <!-- Status strip -->
+  <div class="status-strip">
+    <div class="status-item">
+      <div class="status-dot" id="connDot"></div>
+      <span id="connLabel">—</span>
+    </div>
+    <span class="status-sep">·</span>
+    <div class="status-item" id="pollingState">—</div>
+    <span class="status-sep" id="nextSep" style="display:none">·</span>
+    <div class="countdown" id="countdown" style="display:none"></div>
+  </div>
+
+  <!-- Current queue -->
+  <div class="section-label">Current Cycle</div>
+  <div class="queue-grid" id="queueGrid">
+    <div class="empty">No poll cycle has run yet</div>
+  </div>
+
+  <!-- History -->
+  <div class="section-label">Recent Poll History</div>
+  <div class="history-list" id="historyList">
+    <div class="empty">No completed polls yet</div>
+  </div>
+
+</div>
+
+<script>
+// Nav init
+(function() {
+  function mcPoll() {
+    fetch('/api/connection').then(r=>r.json()).then(d=>{
+      var dot=document.getElementById('mcConnDot'), host=document.getElementById('mcConnHost');
+      if(dot) dot.className='mc-conn-dot '+(d.connected?'online':'offline');
+      if(host) host.textContent=d.connected?(d.host+':'+d.port):'Offline';
+    }).catch(()=>{});
+  }
+  window.mcLogout=()=>fetch('/logout',{method:'POST'}).then(()=>location.href='/login');
+  fetch('/api/me').then(r=>r.json()).then(d=>{
+    var e=document.getElementById('mcUser'); if(e) e.textContent=d.username||'';
+    if(!d.username) location.href='/login';
+  }).catch(()=>{});
+  mcPoll(); setInterval(mcPoll, 15000);
+})();
+
+// ── Poll Queue ───────────────────────────────────────────────
+let history = []; // [{name, pubkey, status, ts_start, ts_end, error}]
+
+function fmtTime(epoch) {
+  if (!epoch) return '—';
+  return new Date(epoch * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function fmtDuration(start, end) {
+  if (!start || !end) return '';
+  const s = Math.round(end - start);
+  if (s < 60) return s + 's';
+  return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+}
+
+function statusLabel(s) {
+  return { waiting: 'Waiting', polling: 'Polling…', complete: 'Complete', failed: 'Failed' }[s] || s;
+}
+
+async function refresh() {
+  try {
+    const data = await fetch('/api/poll-queue').then(r => r.json());
+
+    // ── Status strip ──
+    const connDot   = document.getElementById('connDot');
+    const connLabel = document.getElementById('connLabel');
+    connDot.className   = 'status-dot ' + (data.connected ? 'connected' : 'disconnected');
+    connLabel.textContent = data.connected ? 'Connected' : 'Disconnected';
+
+    const pollingEl = document.getElementById('pollingState');
+    if (!data.polling_enabled) {
+      pollingEl.textContent = 'Auto-poll disabled';
+    } else if (data.current_pubkey) {
+      const cur = data.queue.find(q => q.pubkey === data.current_pubkey);
+      pollingEl.textContent = 'Polling: ' + (cur ? cur.name : data.current_pubkey.slice(0, 8));
+    } else {
+      pollingEl.textContent = data.connected ? 'Idle' : 'Waiting for connection';
+    }
+
+    const countdownEl = document.getElementById('countdown');
+    const nextSep     = document.getElementById('nextSep');
+    if (data.next_cycle_in != null && data.next_cycle_in > 0) {
+      const mins = Math.floor(data.next_cycle_in / 60);
+      const secs = data.next_cycle_in % 60;
+      const label = mins > 0
+        ? 'Next cycle in ' + mins + 'm ' + secs + 's'
+        : 'Next cycle in ' + secs + 's';
+      countdownEl.textContent = label;
+      countdownEl.className = 'countdown' + (data.next_cycle_in < 60 ? ' soon' : '');
+      countdownEl.style.display = '';
+      nextSep.style.display = '';
+    } else if (data.last_cycle_ts) {
+      countdownEl.textContent = 'Cycle running…';
+      countdownEl.className = 'countdown soon';
+      countdownEl.style.display = '';
+      nextSep.style.display = '';
+    } else {
+      countdownEl.style.display = 'none';
+      nextSep.style.display = 'none';
+    }
+
+    // ── Current queue ──
+    const grid = document.getElementById('queueGrid');
+    if (!data.queue || !data.queue.length) {
+      grid.innerHTML = '<div class="empty">No nodes configured — add repeaters in</div>';
+    } else {
+      grid.innerHTML = data.queue.map(item => {
+        const isActive = item.status === 'polling';
+        const timing = item.ts_start
+          ? (item.ts_end
+              ? fmtTime(item.ts_start) + ' → ' + fmtTime(item.ts_end) + ' (' + fmtDuration(item.ts_start, item.ts_end) + ')'
+              : 'Started ' + fmtTime(item.ts_start))
+          : (item.ts_queued ? 'Queued ' + fmtTime(item.ts_queued) : '');
+
+        return `<div class="queue-row status-${item.status}">
+          <div class="q-accent"></div>
+          <div class="q-body">
+            <div>
+              <div class="q-name">${esc(item.name)}</div>
+              <div class="q-pubkey">${item.pubkey.slice(0, 16)}…</div>
+              ${item.error ? `<div class="q-error">${esc(item.error)}</div>` : ''}
+            </div>
+            <div class="q-status-badge">${statusLabel(item.status)}</div>
+            <div class="q-timing">${timing}</div>
+          </div>
+          <div class="q-right">
+            ${isActive ? '<div class="spin"></div>'
+              : `<button class="btn-poll" onclick="pollNow('${item.pubkey}', this)">Poll Now</button>`}
+          </div>
+        </div>`;
+      }).join('');
+
+      // Track history from completed/failed items
+      data.queue.forEach(item => {
+        if ((item.status === 'complete' || item.status === 'failed') && item.ts_end) {
+          const key = item.pubkey + '_' + item.ts_end;
+          if (!history.find(h => h.key === key)) {
+            history.unshift({
+              key, name: item.name, pubkey: item.pubkey,
+              status: item.status, ts_start: item.ts_start,
+              ts_end: item.ts_end, error: item.error,
+            });
+          }
+        }
+      });
+      // Cap history at 100 entries
+      if (history.length > 100) history = history.slice(0, 100);
+    }
+
+    // ── History list ──
+    const histEl = document.getElementById('historyList');
+    if (!history.length) {
+      histEl.innerHTML = '<div class="empty">No completed polls yet</div>';
+    } else {
+      histEl.innerHTML = history.slice(0, 50).map(h => `
+        <div class="history-row">
+          <div class="h-time">${fmtTime(h.ts_end)}</div>
+          <div class="h-name">${esc(h.name)}</div>
+          <div class="h-result ${h.status === 'complete' ? 'ok' : 'err'}">${h.status === 'complete' ? 'OK' : 'FAILED'}</div>
+          ${h.error ? `<div class="h-error">${esc(h.error)}</div>` : ''}
+          <div class="h-duration">${fmtDuration(h.ts_start, h.ts_end)}</div>
+        </div>`).join('');
+    }
+
+  } catch(e) {
+    console.error('Poll queue fetch error:', e);
+  }
+}
+
+async function pollNow(pubkey, btn) {
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const res  = await fetch('/api/ping/' + pubkey, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      await refresh();
+    }
+  } catch(e) {}
+  finally {
+    btn.disabled = false;
+    btn.textContent = 'Poll Now';
+  }
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Refresh every 3 seconds for live feel
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

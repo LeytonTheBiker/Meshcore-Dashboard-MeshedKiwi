@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MeshCore — Public Node Status</title>
+<meta http-equiv="refresh" content="60">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green-dark:  #2d5016;
+    --green-mid:   #4a7c24;
+    --green-light: #c8e6c9;
+    --green-pale:  #f0f7ee;
+    --green-border:#b8d4b0;
+    --bg:          #f5f5f0;
+    --surface:     #ffffff;
+    --surface2:    #f8faf6;
+    --border:      #dde8d6;
+    --text:        #1a1a1a;
+    --text-sec:    #4a5a3a;
+    --muted:       #7a8a6a;
+    --online:      #2d7a22;
+    --offline:     #b91c1c;
+    --warn:        #92400e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Lato', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* HERO HEADER */
+  .pub-header {
+    background: linear-gradient(135deg, var(--green-dark) 0%, var(--green-mid) 100%);
+    padding: 1.5rem 2rem 1.2rem;
+    text-align: center;
+    position: relative;
+  }
+
+  .pub-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 2px;
+    background: var(--green-light); opacity: 0.5;
+  }
+
+  .pub-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 2rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: #fff; line-height: 1;
+  }
+
+  .pub-sub {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.75rem; letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.5);
+    margin-top: 0.3rem;
+  }
+
+  .pub-meta {
+    display: flex; justify-content: center; gap: 1.5rem;
+    margin-top: 0.8rem;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.78rem; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+  }
+
+  .pub-meta span { display: flex; align-items: center; gap: 0.35rem; }
+  .pub-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-light); }
+
+  /* MAIN */
+  main { padding: 1.25rem 1.5rem; max-width: 1400px; margin: 0 auto; }
+
+  .empty-state {
+    text-align: center; padding: 4rem 2rem; color: var(--muted);
+  }
+  .empty-state h2 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.3rem; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-sec);
+  }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0.85rem; }
+
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(45,80,22,0.06);
+    transition: box-shadow 0.2s;
+  }
+  .tile:hover { box-shadow: 0 4px 16px rgba(45,80,22,0.12); }
+
+  .tile-top-bar { height: 3px; background: var(--border); }
+  .tile.online  .tile-top-bar { background: linear-gradient(90deg, var(--green-dark), var(--green-mid)); }
+  .tile.offline .tile-top-bar { background: var(--offline); }
+
+  .tile-header {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.7rem 1rem; border-bottom: 1px solid var(--border);
+    background: var(--green-pale);
+  }
+
+  .tile-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .tile.online  .tile-status-dot { background: var(--online); }
+  .tile.offline .tile-status-dot { background: var(--offline); }
+
+  .tile-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.05rem; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--green-dark); flex: 1;
+  }
+
+  .tile-owner {
+    font-family: monospace; font-size: 0.62rem;
+    color: var(--muted);
+    padding: 0.1rem 0.45rem;
+    background: var(--green-light); border-radius: 20px;
+    border: 1px solid var(--green-border);
+    font-weight: 700; color: var(--green-dark);
+  }
+
+  .sparklines {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .spark-cell { padding: 0.6rem 0.85rem 0.5rem; border-right: 1px solid var(--border); }
+  .spark-cell:last-child { border-right: none; }
+
+  .spark-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 0.1rem;
+  }
+
+  .spark-value {
+    font-family: monospace; font-size: 1rem; font-weight: 700;
+    color: var(--green-dark); line-height: 1.1;
+  }
+  .spark-value.bat-warn { color: #92400e; }
+  .spark-value.bat-low  { color: var(--offline); }
+
+  canvas.sparkline { width: 100%; height: 28px; display: block; margin-top: 0.3rem; }
+
+  .packet-section { padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); }
+
+  .pkt-section-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 0.45rem;
+  }
+
+  .pkt-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.28rem; }
+  .pkt-row:last-child { margin-bottom: 0; }
+
+  .pkt-dir-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.78rem; font-weight: 600; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--text-sec); width: 60px; flex-shrink: 0;
+  }
+
+  .pkt-values { display: flex; flex: 1; }
+  .pkt-cell { flex: 1; text-align: right; }
+
+  .pkt-tag {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+
+  .pkt-num { font-family: monospace; font-size: 0.82rem; font-weight: 700; color: var(--text); }
+  .pkt-num.direct { color: var(--green-dark); }
+  .pkt-num.flood  { color: var(--green-mid); }
+
+  .tile-footer {
+    display: flex; align-items: center; padding: 0.5rem 1rem;
+    background: var(--surface2);
+  }
+
+  .last-polled { font-family: monospace; font-size: 0.65rem; color: var(--muted); }
+
+  /* FOOTER */
+  .pub-footer {
+    text-align: center; padding: 1.5rem;
+    background: var(--green-dark);
+    margin-top: 2rem;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.82rem; letter-spacing: 0.06em;
+    text-transform: uppercase; color: rgba(255,255,255,0.5);
+  }
+  .pub-footer a { color: var(--green-light); text-decoration: none; }
+  .pub-footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="pub-header">
+  <div class="pub-title">📡 MeshCore Network</div>
+  <div class="pub-sub">Public Node Status</div>
+  <div class="pub-meta">
+    <span><span class="pub-dot"></span><span id="onlineCount">—</span> Online</span>
+    <span>Auto-refresh 60s</span>
+    <span id="updateTime">—</span>
+  </div>
+</div>
+
+<main>
+  <div class="grid" id="grid">
+    <div class="empty-state"><h2>Loading node data…</h2></div>
+  </div>
+</main>
+
+<div class="pub-footer">
+  MeshCore Dashboard — <a href="/login">Admin login</a>
+</div>
+
+<script>
+let repeaters = [];
+let histories = {};
+
+async function init() {
+  try {
+    repeaters = await fetch('/api/public/repeaters').then(r => r.json());
+    for (const rep of repeaters) await loadHistory(rep.pubkey);
+    render();
+    const online = repeaters.filter(r => r.online).length;
+    document.getElementById('onlineCount').textContent = online + '/' + repeaters.length;
+    document.getElementById('updateTime').textContent = new Date().toLocaleTimeString();
+  } catch(e) {
+    document.getElementById('grid').innerHTML = '<div class="empty-state"><h2>Unable to load node data</h2></div>';
+  }
+}
+
+async function loadHistory(pubkey) {
+  try { histories[pubkey] = await fetch('/api/public/history/' + pubkey + '?hours=168').then(r => r.json()); }
+  catch(e) { histories[pubkey] = []; }
+}
+
+function batClass(v) { if(!v) return ''; if(v<3.5) return 'bat-low'; if(v<3.7) return 'bat-warn'; return ''; }
+function fmtNum(n) { if(n==null) return '—'; return Number(n).toLocaleString(); }
+function fmtAge(ep) { if(!ep) return 'never'; const d=Math.floor(Date.now()/1000-ep); if(d<60) return d+'s ago'; if(d<3600) return Math.floor(d/60)+'m ago'; if(d<86400) return Math.floor(d/3600)+'h ago'; return Math.floor(d/86400)+'d ago'; }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function render() {
+  const grid = document.getElementById('grid');
+  if (!repeaters.length) { grid.innerHTML = '<div class="empty-state"><h2>No public nodes configured</h2></div>'; return; }
+
+  grid.innerHTML = repeaters.map(rep => {
+    const v   = rep.battery_voltage;
+    const pk  = rep.pubkey.slice(0, 8);
+    const cls = rep.online ? 'online' : 'offline';
+    return `
+      <div class="tile ${cls}" data-pk="${pk}">
+        <div class="tile-top-bar"></div>
+        <div class="tile-header">
+          <div class="tile-status-dot"></div>
+          <span class="tile-name">${esc(rep.name || rep.pubkey_short || 'Node')}</span>
+          ${rep.owner ? `<span class="tile-owner">${esc(rep.owner)}</span>` : ''}
+        </div>
+        <div class="sparklines">
+          <div class="spark-cell">
+            <div class="spark-label">Battery</div>
+            <div class="spark-value ${batClass(v)}">${v ? v.toFixed(2)+' V' : '—'}</div>
+            <canvas class="sparkline" id="sp-bat-${pk}"></canvas>
+          </div>
+          <div class="spark-cell">
+            <div class="spark-label">Noise Floor</div>
+            <div class="spark-value">${rep.noise_floor ? rep.noise_floor+' dBm' : '—'}</div>
+            <canvas class="sparkline" id="sp-nf-${pk}"></canvas>
+          </div>
+          <div class="spark-cell">
+            <div class="spark-label">Temperature</div>
+            <div class="spark-value">${rep.temperature ? rep.temperature.toFixed(1)+'°C' : '—'}</div>
+            <canvas class="sparkline" id="sp-temp-${pk}"></canvas>
+          </div>
+        </div>
+        <div class="packet-section">
+          <div class="pkt-section-title">Packet Counters</div>
+          <div class="pkt-row">
+            <div class="pkt-dir-label">Recv</div>
+            <div class="pkt-values">
+              <div class="pkt-cell"><div class="pkt-tag">Total</div><div class="pkt-num">${fmtNum(rep.packets_recv)}</div></div>
+              <div class="pkt-cell"><div class="pkt-tag">Direct</div><div class="pkt-num direct">${fmtNum(rep.packets_recv_direct)}</div></div>
+              <div class="pkt-cell"><div class="pkt-tag">Flood</div><div class="pkt-num flood">${fmtNum(rep.packets_recv_flood)}</div></div>
+            </div>
+          </div>
+          <div class="pkt-row">
+            <div class="pkt-dir-label">Sent</div>
+            <div class="pkt-values">
+              <div class="pkt-cell"><div class="pkt-tag">Total</div><div class="pkt-num">${fmtNum(rep.packets_sent)}</div></div>
+              <div class="pkt-cell"><div class="pkt-tag">Direct</div><div class="pkt-num direct">${fmtNum(rep.packets_sent_direct)}</div></div>
+              <div class="pkt-cell"><div class="pkt-tag">Flood</div><div class="pkt-num flood">${fmtNum(rep.packets_sent_flood)}</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="tile-footer">
+          <div class="last-polled">Polled ${fmtAge(rep.last_seen_epoch)}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Draw sparklines
+  repeaters.forEach(rep => {
+    const h  = histories[rep.pubkey] || [];
+    const s  = h.length > 80 ? h.filter((_,i) => i % Math.ceil(h.length/80) === 0) : h;
+    const pk = rep.pubkey.slice(0,8);
+    drawSpark(document.getElementById('sp-bat-' + pk),  s.map(h=>h.battery_v),   '#2d5016');
+    drawSpark(document.getElementById('sp-nf-'  + pk),  s.map(h=>h.noise_floor),  '#b45309');
+    drawSpark(document.getElementById('sp-temp-'+ pk),  s.map(h=>h.temperature),  '#4a7c24');
+  });
+}
+
+function drawSpark(canvas, raw, color) {
+  if (!canvas) return;
+  const vals = raw.filter(v => v!=null && v!==0);
+  if (vals.length < 2) return;
+  const dpr=window.devicePixelRatio||1, w=canvas.offsetWidth||100, h=28;
+  canvas.width=w*dpr; canvas.height=h*dpr;
+  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,w,h);
+  const mn=Math.min(...vals), mx=Math.max(...vals), rng=mx-mn||1, p=2;
+  const pts=vals.map((v,i)=>({x:p+(i/(vals.length-1))*(w-p*2), y:h-p-((v-mn)/rng)*(h-p*2)}));
+  const g=ctx.createLinearGradient(0,0,0,h); g.addColorStop(0,color+'28'); g.addColorStop(1,color+'00');
+  ctx.beginPath(); ctx.moveTo(pts[0].x,h); pts.forEach(p=>ctx.lineTo(p.x,p.y)); ctx.lineTo(pts[pts.length-1].x,h); ctx.closePath();
+  ctx.fillStyle=g; ctx.fill();
+  ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+  ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.lineJoin='round'; ctx.stroke();
+  const last=pts[pts.length-1]; ctx.beginPath(); ctx.arc(last.x,last.y,2.5,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
+}
+
+init();
+</script>
+</body>
+</html>

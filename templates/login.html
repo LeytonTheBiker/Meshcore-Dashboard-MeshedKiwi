@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MeshCore Dashboard — Sign In</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green-dark:  #2d5016;
+    --green-mid:   #4a7c24;
+    --green-light: #c8e6c9;
+    --green-pale:  #f0f7ee;
+    --border:      #c8d8bf;
+    --text:        #1a1a1a;
+    --muted:       #6a7a5a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Lato', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    background: linear-gradient(135deg, var(--green-dark) 0%, var(--green-mid) 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Subtle texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 80%, rgba(255,255,255,0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(255,255,255,0.04) 0%, transparent 40%);
+    pointer-events: none;
+  }
+
+  .login-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 2rem;
+  }
+
+  .login-card {
+    background: #fff;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.25), 0 2px 8px rgba(0,0,0,0.15);
+    overflow: hidden;
+  }
+
+  .card-header {
+    background: linear-gradient(135deg, var(--green-dark) 0%, var(--green-mid) 100%);
+    padding: 2rem 2rem 1.6rem;
+    text-align: center;
+  }
+
+  .card-header .icon {
+    font-size: 2.4rem;
+    display: block;
+    margin-bottom: 0.6rem;
+  }
+
+  .card-header h1 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    line-height: 1;
+  }
+
+  .card-header p {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    margin-top: 0.3rem;
+  }
+
+  .card-body {
+    padding: 1.8rem 2rem 2rem;
+  }
+
+  .field-group { margin-bottom: 1.1rem; }
+
+  .field-label {
+    display: block;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.35rem;
+  }
+
+  input[type=text], input[type=password] {
+    width: 100%;
+    background: var(--green-pale);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Lato', sans-serif;
+    font-size: 0.95rem;
+    padding: 0.6rem 0.85rem;
+    outline: none;
+    border-radius: 4px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  input:focus {
+    border-color: var(--green-mid);
+    box-shadow: 0 0 0 3px rgba(74,124,36,0.15);
+    background: #fff;
+  }
+
+  .btn-login {
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: linear-gradient(135deg, var(--green-dark), var(--green-mid));
+    border: none;
+    color: #fff;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: opacity 0.2s, transform 0.15s;
+  }
+
+  .btn-login:hover  { opacity: 0.92; transform: translateY(-1px); }
+  .btn-login:active { transform: translateY(0); }
+  .btn-login:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .error-msg {
+    margin-top: 0.85rem;
+    padding: 0.6rem 0.85rem;
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    border-left: 3px solid #dc2626;
+    color: #b91c1c;
+    font-size: 0.85rem;
+    border-radius: 4px;
+    display: none;
+  }
+
+  .card-footer {
+    padding: 0.9rem 2rem 1.1rem;
+    border-top: 1px solid #eef2ea;
+    text-align: center;
+    background: var(--green-pale);
+  }
+
+  .card-footer a {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--green-mid);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  .card-footer a:hover { color: var(--green-dark); text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+
+    <div class="card-header">
+      <span class="icon">📡</span>
+      <h1>MeshCore</h1>
+      <p>Repeater Dashboard</p>
+    </div>
+
+    <div class="card-body">
+      <div class="field-group">
+        <label class="field-label" for="username">Username</label>
+        <input type="text" id="username" placeholder="admin" autocomplete="username">
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="password">Password</label>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn-login" id="loginBtn" onclick="doLogin()">Sign In</button>
+      <div class="error-msg" id="error"></div>
+    </div>
+
+    <div class="card-footer">
+      <a href="/public">View public node status →</a>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  document.getElementById('password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  async function doLogin() {
+    const btn      = document.getElementById('loginBtn');
+    const err      = document.getElementById('error');
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+
+    if (!username || !password) {
+      err.textContent = 'Please enter your username and password.';
+      err.style.display = 'block'; return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+    err.style.display = 'none';
+
+    try {
+      const res  = await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        window.location.href = '/';
+      } else {
+        err.textContent = data.error || 'Invalid credentials.';
+        err.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    } catch(e) {
+      err.textContent = 'Network error — is the server running?';
+      err.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  }
+</script>
+</body>
+</html>
